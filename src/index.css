@@ -1,0 +1,234 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --barista-orange: #EF6340;
+  --barista-orange-hover: #D84228;
+  --barista-orange-light: rgba(239, 99, 64, 0.15);
+  --barista-orange-border: rgba(239, 99, 64, 0.4);
+  --barista-espresso: #641B0B;
+  --barista-espresso-dark: #20100C;
+  --barista-bg-dark: #0D0B0A;
+  --barista-card-dark: #171311;
+  --barista-card-border: #332824;
+}
+
+body {
+  background-color: #0D0B0A;
+  color: #F5F0EB;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Custom Scrollbar for sleek dark Barista experience */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #14100E;
+}
+::-webkit-scrollbar-thumb {
+  background: #382B25;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #ED5338;
+}
+
+select {
+  color-scheme: dark;
+}
+option, optgroup {
+  background-color: #171311 !important; /* warm dark espresso stone */
+  color: #F5F0EB !important;
+}
+
+/* Reusable Barista UI System Utilities */
+.barista-card {
+  background-color: #171311;
+  border: 1px solid #2E221E;
+  border-radius: 1rem;
+}
+.barista-card-hover {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.barista-card-hover:hover {
+  border-color: rgba(237, 83, 56, 0.5);
+  box-shadow: 0 4px 20px -2px rgba(237, 83, 56, 0.12);
+}
+
+.btn-barista-primary {
+  background-color: #ED5338;
+  color: #FFFFFF;
+  font-weight: 700;
+  border-radius: 0.75rem;
+  transition: all 0.15s ease-in-out;
+  box-shadow: 0 4px 14px 0 rgba(237, 83, 56, 0.3);
+  cursor: pointer;
+}
+.btn-barista-primary:hover:not(:disabled) {
+  background-color: #D84228;
+  box-shadow: 0 6px 20px rgba(237, 83, 56, 0.4);
+}
+.btn-barista-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-barista-secondary {
+  background-color: #221B18;
+  color: #E6DCD6;
+  border: 1px solid #3A2D27;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  transition: all 0.15s ease-in-out;
+  cursor: pointer;
+}
+.btn-barista-secondary:hover:not(:disabled) {
+  background-color: #2D231F;
+  border-color: #ED5338;
+  color: #FFFFFF;
+}
+
+.input-barista {
+  background-color: #1A1412;
+  border: 1px solid #382B25;
+  color: #F5F0EB;
+  border-radius: 0.75rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.input-barista:focus {
+  outline: none;
+  border-color: #ED5338;
+  box-shadow: 0 0 0 1px #ED5338;
+}
+
+.badge-barista {
+  background-color: rgba(237, 83, 56, 0.15);
+  color: #FFA594;
+  border: 1px solid rgba(237, 83, 56, 0.35);
+  font-weight: 700;
+  font-family: ui-monospace, monospace;
+}
+
+/* Hide browser default number input spin arrows */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
+input[type="number"] {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
+}
+
+@media screen {
+  #print-root {
+    display: none !important;
+  }
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm 8mm 14mm; /* Outer page boundaries: 14mm left for hole-punching */
+  }
+
+  html, body {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* STRICT PRINT ISOLATION:
+     Completely suppress the interactive application tree.
+     Only render the official printable sheet / report in #print-root. */
+  #root {
+    display: none !important;
+  }
+
+  /* Exclusively display the isolated print root container */
+  #print-root {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+  }
+
+  #print-root * {
+    visibility: visible !important;
+  }
+
+  /* Strip outer modal backdrops and card wrappers */
+  #print-root .printable-modal-overlay,
+  #print-root .printable-card-container {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    inset: auto !important;
+  }
+
+  /* Document body: retains balanced inner padding and rounded elegance */
+  #print-root .print-content {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 4mm 6mm !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+  }
+
+  /* Explicitly suppress all elements with print:hidden */
+  .print\:hidden,
+  #print-root .print\:hidden {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  .print\:block,
+  #print-root .print\:block {
+    display: block !important;
+  }
+
+  /* Avoid unnecessary page breaks */
+  header,
+  table,
+  tr,
+  .print-avoid-break {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* High fidelity print color retention */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+}

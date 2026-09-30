@@ -1,0 +1,162 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with username authentication, role-based access control and module permissions",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User identifier" },
+        "username": { "type": "string", "maxLength": 50, "description": "Unique staff username for authentication" },
+        "userIdCode": { "type": "string", "maxLength": 20, "description": "Custom staff employee ID" },
+        "email": { "type": "string", "description": "User email address" },
+        "password": { "type": "string", "description": "Hashed or plain staff login password" },
+        "mustResetPassword": { "type": "boolean", "description": "Flag indicating user must change temporary one-time password on login" },
+        "status": { "type": "string", "enum": ["active", "suspended"], "description": "Account status (active or suspended)" },
+        "displayName": { "type": "string", "maxLength": 100, "description": "Display name of the user" },
+        "role": { "type": "string", "enum": ["admin", "editor", "viewer", "driver"], "description": "Access control role" },
+        "permissions": {
+          "type": "object",
+          "description": "Granular module visibility and edit permissions"
+        },
+        "designation": { "type": "string", "maxLength": 100, "description": "Staff title or job role" },
+        "department": { "type": "string", "maxLength": 100, "description": "Staff department" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of user creation" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last update" }
+      },
+      "required": ["uid", "username", "role"]
+    },
+    "InventoryBatch": {
+      "title": "InventoryBatch",
+      "description": "Central kitchen inventory batch record",
+      "type": "object",
+      "properties": {
+        "batchNo": { "type": "string", "maxLength": 50, "description": "Unique batch number e.g. B-2025-001" },
+        "productName": { "type": "string", "maxLength": 120, "description": "Pastry or central kitchen product name" },
+        "category": { "type": "string", "maxLength": 50, "description": "Category e.g. Pastry Kitchen Items" },
+        "initialQuantity": { "type": "number", "description": "Original batch quantity produced" },
+        "quantity": { "type": "number", "description": "Current remaining stock quantity" },
+        "prodDate": { "type": "string", "description": "Production date YYYY-MM-DD" },
+        "useByDate": { "type": "string", "description": "Expiration / Use-by date YYYY-MM-DD" },
+        "dispatchTemp": { "type": "number", "description": "Dispatch temperature in Celsius, target <= 5 C" },
+        "unit": { "type": "string", "maxLength": 20, "description": "Unit of measurement e.g. slices, cakes, packs" },
+        "createdBy": { "type": "string", "description": "User ID of creator" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "description": "Update timestamp" }
+      },
+      "required": ["batchNo", "productName", "quantity", "prodDate", "useByDate", "dispatchTemp"]
+    },
+    "BatchLog": {
+      "title": "BatchLog",
+      "description": "Audit log for inventory deductions and dispatch links",
+      "type": "object",
+      "properties": {
+        "batchId": { "type": "string", "description": "Inventory batch ID" },
+        "batchNo": { "type": "string", "description": "Batch number" },
+        "action": { "type": "string", "description": "Action type e.g. dispatch_deduction, adjustment" },
+        "quantityChanged": { "type": "number", "description": "Amount changed (negative for deduction)" },
+        "previousQty": { "type": "number", "description": "Quantity before action" },
+        "newQty": { "type": "number", "description": "Quantity after action" },
+        "referenceId": { "type": "string", "description": "Dispatch log ID or note" },
+        "outletName": { "type": "string", "description": "Outlet name if dispatch" },
+        "recordedBy": { "type": "string", "description": "User email or name" },
+        "timestamp": { "type": "string", "description": "ISO timestamp of transaction" }
+      },
+      "required": ["batchNo", "action", "quantityChanged", "recordedBy"]
+    },
+    "Outlet": {
+      "title": "Outlet",
+      "description": "Barista retail outlet receiving central kitchen dispatches",
+      "type": "object",
+      "properties": {
+        "outletId": { "type": "string", "maxLength": 50, "description": "Code e.g. OUT-001" },
+        "name": { "type": "string", "maxLength": 100, "description": "Outlet branch name" },
+        "location": { "type": "string", "maxLength": 150, "description": "City or address" },
+        "contact": { "type": "string", "maxLength": 50, "description": "Contact phone or manager" },
+        "active": { "type": "boolean", "description": "Whether outlet is currently operational" }
+      },
+      "required": ["outletId", "name"]
+    },
+    "DispatchLog": {
+      "title": "DispatchLog",
+      "description": "HACCP BCL/REC/HACCP/32 central kitchen dispatch document",
+      "type": "object",
+      "properties": {
+        "docNo": { "type": "string", "description": "BCL/REC/HACCP/32" },
+        "date": { "type": "string", "description": "Dispatch date YYYY-MM-DD" },
+        "dispatchTime": { "type": "string", "description": "Dispatch time HH:MM" },
+        "outletNames": { "type": "string", "description": "Comma separated outlet names or single outlet" },
+        "outletIds": { "type": "string", "description": "Selected outlet IDs" },
+        "driverName": { "type": "string", "maxLength": 100, "description": "Assigned delivery driver name" },
+        "supervisor": { "type": "string", "maxLength": 100, "description": "Authenticated user who signed and issued" },
+        "supervisorId": { "type": "string", "description": "User ID of supervisor" },
+        "items": { "type": "string", "description": "Serialized JSON list of dispatched line items" },
+        "notes": { "type": "string", "maxLength": 500, "description": "Special transit or cold-chain notes" },
+        "haccpCompliant": { "type": "boolean", "description": "Whether temperatures were <= 5C" },
+        "status": { "type": "string", "enum": ["submitted", "in_transit", "delivered", "edited"], "description": "Dispatch status" },
+        "createdAt": { "type": "string", "description": "ISO timestamp" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["docNo", "date", "dispatchTime", "outletNames", "driverName", "supervisor"]
+    },
+    "Driver": {
+      "title": "Driver",
+      "description": "Delivery logistics driver",
+      "type": "object",
+      "properties": {
+        "driverId": { "type": "string", "description": "Driver code" },
+        "name": { "type": "string", "maxLength": 100, "description": "Driver full name" },
+        "vehicleNo": { "type": "string", "maxLength": 50, "description": "Refrigerated vehicle registration number" },
+        "phone": { "type": "string", "maxLength": 30, "description": "Phone number" },
+        "active": { "type": "boolean", "description": "Active status" }
+      },
+      "required": ["name", "vehicleNo"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Central kitchen product with system-generated immutable product ID, name, category, and default dispatch temperature",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string", "maxLength": 50, "description": "System-generated immutable product code e.g. PRD-01" },
+        "name": { "type": "string", "maxLength": 120, "description": "Product name" },
+        "category": { "type": "string", "maxLength": 80, "description": "Category name" },
+        "dispatchTemp": { "type": "number", "description": "Default dispatch temperature in Celsius <= 5 C" },
+        "shelfLifeDays": { "type": "number", "description": "Shelf life in days" },
+        "unit": { "type": "string", "maxLength": 30, "description": "Unit e.g. Slices, Cakes, Packs" },
+        "active": { "type": "boolean", "description": "Whether product is currently available" },
+        "createdAt": { "type": "string", "description": "ISO timestamp" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["productId", "name", "dispatchTemp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profiles and RBAC permissions"
+    },
+    "/inventory/{batchId}": {
+      "schema": { "$ref": "#/entities/InventoryBatch" },
+      "description": "Central kitchen inventory batches"
+    },
+    "/batch_logs/{logId}": {
+      "schema": { "$ref": "#/entities/BatchLog" },
+      "description": "Real-time stock deduction and adjustment logs"
+    },
+    "/outlets/{outletId}": {
+      "schema": { "$ref": "#/entities/Outlet" },
+      "description": "Retail coffee outlets and branches"
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Central kitchen product catalog"
+    },
+    "/dispatch_logs/{dispatchId}": {
+      "schema": { "$ref": "#/entities/DispatchLog" },
+      "description": "HACCP compliant central kitchen dispatch records"
+    },
+    "/drivers/{driverId}": {
+      "schema": { "$ref": "#/entities/Driver" },
+      "description": "Delivery fleet drivers and refrigerated vehicle registry"
+    }
+  }
+}

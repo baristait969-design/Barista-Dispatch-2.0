@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000">
+  <circle cx="500" cy="500" r="500" fill="#EF6340"/>
+  <text
+    x="500"
+    y="672"
+    text-anchor="middle"
+    textLength="780"
+    lengthAdjust="spacingAndGlyphs"
+    font-family="Arial Narrow, Liberation Sans Narrow, Impact, sans-serif"
+    font-size="345"
+    font-weight="700"
+    fill="#FFFFFF">BARISTA</text>
+  <rect x="502" y="640" width="150" height="32" rx="1" fill="#641B0B"/>
+</svg>

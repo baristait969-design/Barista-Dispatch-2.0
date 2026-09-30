@@ -1,0 +1,8 @@
+{
+  "name": "Barista Central Kitchen Dispatch & Inventory System",
+  "description": "HACCP compliant central kitchen dispatch logs, inventory tracking, role-based access management, and outlet delivery system.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

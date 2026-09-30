@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Connection test document
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+    // Users collection - user profiles and credentials
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+    // Central Kitchen Inventory batches
+    match /inventory/{batchId} {
+      allow read, write: if true;
+    }
+    // Batch Audit Logs
+    match /batch_logs/{logId} {
+      allow read, write: if true;
+    }
+    // Retail Outlets (Barista coffee branches)
+    match /outlets/{outletId} {
+      allow read, write: if true;
+    }
+    // Products catalog (Pastry, Bakery, Savory items)
+    match /products/{productId} {
+      allow read, write: if true;
+    }
+    // HACCP Dispatch Logs (BCL/REC/HACCP/32)
+    match /dispatch_logs/{dispatchId} {
+      allow read, write: if true;
+    }
+    // Logistics Drivers & Chilled Vehicles
+    match /drivers/{driverId} {
+      allow read, write: if true;
+    }
+    // Deleted batch tombstones and metadata
+    match /deleted_batches/{batchId} {
+      allow read, write: if true;
+    }
+    match /system_metadata/{metaId} {
+      allow read, write: if true;
+    }
+    match /deleted_users/{docId} {
+      allow read, write: if true;
+    }
+    // Fallback rule
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
