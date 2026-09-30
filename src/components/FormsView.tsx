@@ -1413,7 +1413,7 @@ export const FormsView: React.FC<FormsViewProps> = ({
                 <table className="w-full text-left text-xs">
                   <thead className="bg-stone-850 print:bg-gray-100 text-stone-300 print:text-black font-bold uppercase tracking-wider border-b border-stone-700 print:border-black select-none text-[11px]">
                     <tr>
-                      <th className="py-2 px-3 w-[26%]">Product Name</th>
+                      <th className="py-2 px-3 w-[33%]">Product Name</th>
                       <th className="py-2 px-2.5 w-[14%]">
                         <div className="flex items-center justify-between">
                           <span>Dispatch Time</span>
@@ -1422,7 +1422,7 @@ export const FormsView: React.FC<FormsViewProps> = ({
                           </span>
                         </div>
                       </th>
-                      <th className="py-2 px-2.5 w-[19%]">Batch No</th>
+                      <th className="py-2 px-2.5 w-[12%]">Batch No</th>
                       <th className="py-2 px-2 w-[11%] text-center">Qty</th>
                       <th className="py-2 px-2 w-[10%] text-center">Prod. Date</th>
                       <th className="py-2 px-2 w-[10%] text-center">Exp. Date</th>

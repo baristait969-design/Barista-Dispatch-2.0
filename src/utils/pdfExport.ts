@@ -537,14 +537,14 @@ export function buildSingleDispatchDoc(log: Partial<DispatchLog> & {
     },
     columnStyles: {
       0: { halign: 'center', cellWidth: 10 },
-      1: { fontStyle: 'bold', cellWidth: 46 },
-      2: { cellWidth: 26 },
+      1: { fontStyle: 'bold', cellWidth: 58 },
+      2: { halign: 'center', cellWidth: 16 },
       3: { halign: 'center', cellWidth: 18 },
-      4: { halign: 'center', cellWidth: 20 },
-      5: { halign: 'center', cellWidth: 20 },
+      4: { halign: 'center', cellWidth: 19 },
+      5: { halign: 'center', cellWidth: 19 },
       6: { halign: 'center', fontStyle: 'bold', cellWidth: 14 },
-      7: { halign: 'center', fontStyle: 'bold', cellWidth: 14 },
-      8: { halign: 'center', fontStyle: 'bold', cellWidth: 14 }
+      7: { halign: 'center', fontStyle: 'bold', cellWidth: 12 },
+      8: { halign: 'center', fontStyle: 'bold', cellWidth: 12 }
     },
     didParseCell: function(data) {
       if (data.section === 'body' && data.column.index === 8) {
