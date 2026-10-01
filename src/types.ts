@@ -104,10 +104,15 @@ export interface DispatchLineItem {
 
 export interface DispatchLog {
   id: string;
-  docNo: string; // "BCL/REC/HACCP/32"
+  reportNo: string; // Unique Report Number, e.g. "DSP-0001" (stays same across edits/revisions)
+  documentName: string; // Unique Document Name: "DSP-0001" or "<previousDocumentName>-Rev02"
+  docNo: string; // "BCL/REC/HACCP/32" (Record Code)
   title: string; // "Central Kitchen Dispatch Log"
-  revision: string; // "Rev 01"
-  version: string; // "01"
+  revision: string; // "Rev 01", "Rev 02", etc.
+  version: string; // "01", "02", etc.
+  revisionNumber: number; // 1, 2, 3...
+  previousDocId?: string; // ID of the previous document if this is an edited revision
+  previousDocumentName?: string; // Name of the previous document before this revision upgrade
   effectiveDate: string; // "01 January 2025"
   haccpLink: string; // "OPRP-2"
   approvedBy: string; // "QA Executive"
@@ -123,6 +128,7 @@ export interface DispatchLog {
   items: DispatchLineItem[];
   haccpCompliant: boolean;
   notes?: string;
+  editReason?: string; // Reason or description of revision changes
   status: 'submitted' | 'in_transit' | 'delivered' | 'edited';
   createdAt: string;
   updatedAt?: string;
@@ -135,4 +141,12 @@ export interface Driver {
   vehicleNo: string;
   phone: string;
   active: boolean;
+}
+
+export interface MonthlyDispatchCycle {
+  lastResetAt: string; // ISO string e.g. "2026-09-30T12:00:00.000Z"
+  resetBy: string; // "admin" or "Automated System (1st 12:00 AM)"
+  resetReason?: string;
+  cycleMonth: string; // "2026-09"
+  archivedCount?: number;
 }

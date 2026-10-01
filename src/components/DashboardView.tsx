@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useModal } from '../context/ModalDialogContext';
 import { 
   Package, 
   FileText, 
@@ -9,10 +10,21 @@ import {
   ThermometerSnowflake, 
   AlertTriangle, 
   Clock, 
-  ArrowRight,
-  UtensilsCrossed
+  ArrowRight, 
+  UtensilsCrossed, 
+  RotateCcw, 
+  Calendar,
+  CheckCircle2,
+  Trash2,
+  ShieldCheck
 } from 'lucide-react';
-import { InventoryBatch, DispatchLog, Outlet, Product } from '../types';
+import { InventoryBatch, DispatchLog, Outlet, Product, MonthlyDispatchCycle } from '../types';
+import { 
+  subscribeMonthlyCycle, 
+  checkAndApplyAutomaticMonthlyReset,
+  getDefaultMonthlyCycle
+} from '../services/dataService';
+import { getDispatchReportNo, getDispatchDocumentName } from '../utils/dispatchNumberUtils';
 
 interface DashboardViewProps {
   batches: InventoryBatch[];
@@ -20,6 +32,7 @@ interface DashboardViewProps {
   outlets: Outlet[];
   products?: Product[];
   onNavigate: (tab: string) => void;
+  dispatchCycle?: MonthlyDispatchCycle;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -27,21 +40,159 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   dispatchLogs,
   outlets,
   products,
-  onNavigate
+  onNavigate,
+  dispatchCycle: propDispatchCycle,
 }) => {
   const { userProfile, role, hasAccess } = useAuth();
+  const [dispatchFilterMode, setDispatchFilterMode] = useState<'monthly' | 'all'>('monthly');
+  const [cycleState, setCycleState] = useState<MonthlyDispatchCycle>(
+    propDispatchCycle || getDefaultMonthlyCycle()
+  );
+
+  // Subscribe to real-time cycle updates in Firestore & localStorage
+  useEffect(() => {
+    checkAndApplyAutomaticMonthlyReset().then((current) => {
+      setCycleState(current);
+    });
+
+    const unsub = subscribeMonthlyCycle((cycle) => {
+      if (cycle) {
+        setCycleState(cycle);
+      }
+    });
+
+    return () => {
+      unsub();
+    };
+  }, []);
+
+  // Update when prop changes
+  useEffect(() => {
+    if (propDispatchCycle) {
+      setCycleState(propDispatchCycle);
+    }
+  }, [propDispatchCycle]);
+
+  // Live timer for automatic cycle rollover countdown & check (updates every 1s in real-time)
+  const [now, setNow] = useState<Date>(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const current = new Date();
+      setNow(current);
+
+      // Check if current date has crossed the 1st of the month at 12:00 AM
+      const currentYear = current.getFullYear();
+      const currentMonthIndex = current.getMonth();
+      const firstOfThisMonth = new Date(currentYear, currentMonthIndex, 1, 0, 0, 0, 0);
+
+      if (cycleState?.lastResetAt) {
+        const lastReset = new Date(cycleState.lastResetAt);
+        if (current.getTime() >= firstOfThisMonth.getTime() && lastReset.getTime() < firstOfThisMonth.getTime()) {
+          checkAndApplyAutomaticMonthlyReset().then(setCycleState);
+        }
+      }
+    }, 1000); // 1-second real-time live tick
+
+    return () => clearInterval(timer);
+  }, [cycleState]);
 
   const totalStockUnits = batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
   const lowStockCount = batches.filter(b => b.quantity <= 15).length;
   
-  const today = new Date().toISOString().split('T')[0];
+  const today = now.toISOString().split('T')[0];
+
+  // Current Month calculation (from 1st of month 12:00 AM to end of month)
+  const currentYear = now.getFullYear();
+  const currentMonthIndex = now.getMonth(); // 0-indexed
+  const currentMonthPrefix = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, '0')}`;
+  const currentMonthName = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+  // 1st of the CURRENT month at 12:00 A.M.
+  const firstOfCurrentMonth = useMemo(() => {
+    return new Date(currentYear, currentMonthIndex, 1, 0, 0, 0, 0);
+  }, [currentYear, currentMonthIndex]);
+
+  // Next month 1st at 12:00 A.M.
+  const nextMonthResetDate = useMemo(() => {
+    return new Date(currentYear, currentMonthIndex + 1, 1, 0, 0, 0, 0);
+  }, [currentYear, currentMonthIndex]);
+
+  // Real-time automatic reset countdown format:
+  // e.g. "5 days 5 hours left", or if lower than days: "23 hours 3 minutes left", or if lower than hours: "X minutes left"
+  const timeLeftForReset = useMemo(() => {
+    const msUntilReset = Math.max(0, nextMonthResetDate.getTime() - now.getTime());
+    const totalMinutes = Math.floor(msUntilReset / (1000 * 60));
+    const totalHours = Math.floor(totalMinutes / 60);
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    const minutes = totalMinutes % 60;
+
+    if (days > 0) {
+      const dUnit = days === 1 ? 'day' : 'days';
+      const hUnit = hours === 1 ? 'hour' : 'hours';
+      return `${days} ${dUnit} ${hours} ${hUnit} left`;
+    }
+
+    if (totalHours > 0) {
+      const hUnit = totalHours === 1 ? 'hour' : 'hours';
+      const mUnit = minutes === 1 ? 'minute' : 'minutes';
+      return `${totalHours} ${hUnit} ${minutes} ${mUnit} left`;
+    }
+
+    const mUnit = minutes === 1 ? 'minute' : 'minutes';
+    return `${Math.max(1, minutes)} ${mUnit} left`;
+  }, [nextMonthResetDate, now]);
+
+  const activeProductsCount = useMemo(() => {
+    return (products || []).filter(p => p.active !== false).length;
+  }, [products]);
+
+  // Cycle cutoff point: whichever is later between the 1st of this month @ 12:00 AM and any manual reset in this month
+  const cycleCutoffTime = useMemo(() => {
+    const firstTime = firstOfCurrentMonth.getTime();
+    if (!cycleState?.lastResetAt) return firstTime;
+    const resetTime = new Date(cycleState.lastResetAt).getTime();
+    // Only accept lastResetAt if it is within or after the start of this month
+    if (resetTime >= firstTime) {
+      return resetTime;
+    }
+    return firstTime;
+  }, [firstOfCurrentMonth, cycleState?.lastResetAt]);
+
+  // Filter logs for the ACTIVE MONTHLY CYCLE:
+  // Starts on the 1st of the month at 12:00 A.M. (or at latest reset) and resets on each and every month 1st at 12:00 A.M.
+  const monthlyDispatches = useMemo(() => {
+    return dispatchLogs.filter((d) => {
+      // Must be in the current calendar month
+      const matchesDate = Boolean(d.date && d.date.startsWith(currentMonthPrefix));
+      const matchesCreated = Boolean(d.createdAt && d.createdAt.startsWith(currentMonthPrefix));
+      if (!matchesDate && !matchesCreated) return false;
+
+      // Must be created on or after the cycle reset cutoff timestamp
+      const itemTime = new Date(d.createdAt || d.date).getTime();
+      if (!isNaN(itemTime) && itemTime < cycleCutoffTime) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [dispatchLogs, currentMonthPrefix, cycleCutoffTime]);
+
+  const monthlyUnitsDispatched = useMemo(() => {
+    return monthlyDispatches.reduce((acc, log) => {
+      return acc + log.items.reduce((s, i) => s + (i.quantity || 0), 0);
+    }, 0);
+  }, [monthlyDispatches]);
+
+  const todayDispatches = useMemo(() => {
+    return monthlyDispatches.filter(d => d.date === today || d.createdAt.startsWith(today)).length;
+  }, [monthlyDispatches, today]);
+
   const expiringSoonCount = batches.filter(b => {
     if (!b.useByDate) return false;
     const diffDays = (new Date(b.useByDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24);
     return diffDays <= 3;
   }).length;
-
-  const todayDispatches = dispatchLogs.filter(d => d.date === today || d.createdAt.startsWith(today)).length;
 
   const quickNav = [
     {
@@ -191,15 +342,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         )}
 
         {(hasAccess('forms', 'view') || hasAccess('reports', 'view')) && (
-          <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 shadow-sm">
+          <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 shadow-sm relative overflow-hidden group">
             <div className="flex items-center justify-between text-stone-400 text-xs mb-1">
-              <span>Today's Dispatches</span>
-              <Clock className="w-4 h-4 text-blue-400" />
+              <span className="font-semibold text-stone-300">Monthly Dispatches</span>
+              <div className="flex items-center space-x-1.5">
+                <Clock className="w-3.5 h-3.5 text-blue-400" />
+                <span className="text-[10px] bg-blue-500/10 text-blue-300 border border-blue-500/20 px-1.5 py-0.5 rounded font-mono font-bold">
+                  {currentMonthName}
+                </span>
+              </div>
             </div>
-            <div className="text-2xl font-black text-white">{todayDispatches}</div>
-            <div className="text-[11px] text-stone-400 mt-1">
-              <span>Total recorded: </span>
-              <span className="text-blue-400 font-semibold">{dispatchLogs.length} logs</span>
+            <div className="flex items-baseline space-x-1.5 mt-0.5">
+              <span className="text-2xl font-black text-white font-mono">{monthlyDispatches.length}</span>
+              <span className="text-xs text-stone-400 font-medium">logs this month</span>
+            </div>
+            <div className="text-[11px] text-stone-400 mt-1.5 flex flex-col space-y-1">
+              <div className="flex items-center justify-between">
+                <span>Today: <strong className="text-white font-mono">{todayDispatches}</strong></span>
+                <span>Units: <strong className="text-amber-400 font-mono">{monthlyUnitsDispatched}</strong></span>
+              </div>
+              <div className="text-[10px] text-stone-400 font-mono flex items-center justify-between pt-1 border-t border-stone-800/80">
+                <span className="text-stone-400 flex items-center space-x-1">
+                  <Clock className="w-3 h-3 text-blue-400 shrink-0" />
+                  <span>Next Reset:</span>
+                </span>
+                <span className="text-amber-400 font-semibold">{timeLeftForReset}</span>
+              </div>
             </div>
           </div>
         )}
@@ -221,14 +389,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 shadow-sm">
           <div className="flex items-center justify-between text-stone-400 text-xs mb-1">
-            <span>Cold-Chain Status</span>
-            <ThermometerSnowflake className="w-4 h-4 text-cyan-400" />
+            <span>Active Products</span>
+            <UtensilsCrossed className="w-4 h-4 text-amber-500" />
           </div>
-          <div className="text-xl font-black text-cyan-400 flex items-center space-x-1">
-            <span>&lt;= 5.0 C</span>
+          <div className="text-2xl font-black text-white">
+            {activeProductsCount}
           </div>
           <div className="text-[11px] text-stone-400 mt-1">
-            <span>100% HACCP Standard</span>
+            <span>Catalog items active</span>
           </div>
         </div>
       </div>
@@ -251,7 +419,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
               <button
                 onClick={() => onNavigate('inventory')}
-                className="text-xs bg-[#ED5338] hover:bg-[#D84228] text-white font-bold px-3 py-1.5 rounded-lg shadow-sm transition"
+                className="text-xs bg-[#ED5338] hover:bg-[#D84228] text-white font-bold px-3 py-1.5 rounded-lg shadow-sm transition cursor-pointer"
               >
                 Inspect
               </button>
@@ -273,7 +441,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
               <button
                 onClick={() => onNavigate('inventory')}
-                className="text-xs bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-1.5 rounded-lg transition"
+                className="text-xs bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-1.5 rounded-lg transition cursor-pointer"
               >
                 Check
               </button>
@@ -322,56 +490,153 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Recent Dispatches Section */}
-      <div className="bg-[#171311] border border-[#2E221E] rounded-xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-white text-sm flex items-center space-x-2">
-            <FileText className="w-4 h-4 text-[#ED5338]" />
-            <span>Recent Kitchen Dispatch Logs</span>
-          </h3>
-          {(hasAccess('reports', 'view') || hasAccess('forms', 'view')) && (
-            <button
-              onClick={() => onNavigate(hasAccess('reports', 'view') ? 'reports' : 'forms')}
-              className="text-xs text-[#FFA594] hover:text-[#ED5338] transition font-semibold cursor-pointer"
-            >
-              View All ({dispatchLogs.length})
-            </button>
-          )}
-        </div>
-        {dispatchLogs.length === 0 ? (
-          <div className="text-center py-8 text-stone-500 text-xs">
-            No dispatch logs recorded yet.
+      {/* Recent Dispatches Section - Monthly Reset Cycle */}
+      <div className="bg-[#171311] border border-[#2E221E] rounded-xl p-5 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <div className="flex items-center space-x-2 flex-wrap">
+              <h3 className="font-bold text-white text-sm flex items-center space-x-2">
+                <FileText className="w-4 h-4 text-[#ED5338]" />
+                <span>Kitchen Dispatch Records</span>
+              </h3>
+              <span className="text-[10px] bg-[#221A17] text-[#FFA594] border border-[#382B25] px-2 py-0.5 rounded font-mono font-bold">
+                {dispatchFilterMode === 'monthly' ? currentMonthName : 'All Historical'}
+              </span>
+              {dispatchFilterMode === 'monthly' && (
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded font-mono font-semibold">
+                  Active Cycle: {monthlyDispatches.length} Logs
+                </span>
+              )}
+            </div>
+
+            <p className="text-[11px] text-stone-400 mt-1 flex items-center space-x-1.5 font-mono">
+              <Clock className="w-3 h-3 text-amber-500 shrink-0" />
+              <span>
+                Current Month Dispatch Cycle ({currentMonthName}) &bull; <strong className="text-amber-400">{timeLeftForReset}</strong>
+              </span>
+            </p>
           </div>
-        ) : (
-          <div className="divide-y divide-[#261D1A]">
-            {dispatchLogs.slice(0, 5).map((log) => (
-              <div key={log.id} className="py-3 flex items-center justify-between">
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <span className="font-bold text-white text-xs">{log.docNo}</span>
-                    <span className="text-[10px] bg-[#221A17] border border-[#382B25] px-1.5 py-0.2 rounded text-stone-300">
-                      {log.date} @ {log.dispatchTime}
-                    </span>
-                    <span className="text-[10px] text-[#FFA594] font-semibold">
-                      {log.outletNames.join(', ')}
-                    </span>
+
+          <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+            {/* Filter Toggle: Current Month vs All Time */}
+            <div className="flex rounded-lg bg-stone-900 p-0.5 border border-stone-800 text-xs">
+              <button
+                type="button"
+                onClick={() => setDispatchFilterMode('monthly')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${
+                  dispatchFilterMode === 'monthly'
+                    ? 'bg-[#ED5338] text-white shadow-sm'
+                    : 'text-stone-400 hover:text-white'
+                }`}
+              >
+                This Month ({monthlyDispatches.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setDispatchFilterMode('all')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${
+                  dispatchFilterMode === 'all'
+                    ? 'bg-[#ED5338] text-white shadow-sm'
+                    : 'text-stone-400 hover:text-white'
+                }`}
+              >
+                All History ({dispatchLogs.length})
+              </button>
+            </div>
+
+            {(hasAccess('reports', 'view') || hasAccess('forms', 'view')) && (
+              <button
+                onClick={() => onNavigate(hasAccess('reports', 'view') ? 'reports' : 'forms')}
+                className="text-xs text-[#FFA594] hover:text-[#ED5338] transition font-semibold cursor-pointer flex items-center space-x-1 ml-1"
+                title="View full audit archive in Reports module"
+              >
+                <span>Reports</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Display List according to filter mode */}
+        {(() => {
+          const listToDisplay = dispatchFilterMode === 'monthly' ? monthlyDispatches : dispatchLogs;
+          if (listToDisplay.length === 0) {
+            return (
+              <div className="text-center py-8 text-stone-500 text-xs bg-stone-900/40 rounded-xl border border-dashed border-stone-800 space-y-2 p-4">
+                <p className="text-stone-300 font-semibold text-sm">
+                  {dispatchFilterMode === 'monthly'
+                    ? `No active dispatches recorded for ${currentMonthName}.`
+                    : 'No dispatch logs recorded yet.'}
+                </p>
+                <p className="text-[11px] text-stone-400 max-w-lg mx-auto">
+                  {dispatchFilterMode === 'monthly'
+                    ? `Dispatches created for ${currentMonthName} in Dispatch Forms will appear here.`
+                    : 'Dispatches issued in Dispatch Forms will appear here.'}
+                </p>
+                {dispatchFilterMode === 'monthly' && dispatchLogs.length > 0 && (
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setDispatchFilterMode('all')}
+                      className="text-xs bg-[#221A17] hover:bg-[#2C211D] border border-[#382B25] text-[#FFA594] hover:text-white px-3 py-1.5 rounded-lg transition cursor-pointer font-medium"
+                    >
+                      View All Prior Dispatches ({dispatchLogs.length} historical logs)
+                    </button>
                   </div>
-                  <p className="text-[11px] text-stone-400 mt-0.5">
-                    Driver: <span className="text-stone-300">{log.driverName}</span> - Supervisor: <span className="text-stone-300">{log.supervisor}</span> - {log.items.length} product line(s)
-                  </p>
-                </div>
-                {(hasAccess('reports', 'view') || hasAccess('forms', 'view')) && (
-                  <button
-                    onClick={() => onNavigate(hasAccess('reports', 'view') ? 'reports' : 'forms')}
-                    className="text-xs bg-[#221A17] hover:bg-[#2C211D] border border-[#382B25] text-stone-300 hover:text-white px-2.5 py-1 rounded transition cursor-pointer"
-                  >
-                    Details
-                  </button>
                 )}
               </div>
-            ))}
-          </div>
-        )}
+            );
+          }
+
+          return (
+            <div className="divide-y divide-[#261D1A]">
+              {listToDisplay.slice(0, 5).map((log) => {
+                const docName = log.documentName || getDispatchDocumentName(log);
+                const repNo = log.reportNo || getDispatchReportNo(log);
+                const rev = log.revision || 'Rev 01';
+                const ver = log.version || '01';
+
+                return (
+                  <div key={log.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                        <span className="font-mono font-black text-amber-400 text-xs">{docName}</span>
+                        <span className="text-[10px] bg-stone-800 border border-stone-700 px-1.5 py-0.2 rounded font-mono text-stone-200 font-bold">
+                          {rev} / {ver}
+                        </span>
+                        <span className="text-[10px] bg-[#221A17] text-[#FFA594] border border-[#382B25] px-1.5 py-0.2 rounded font-mono font-semibold">
+                          #{repNo}
+                        </span>
+                        {log.previousDocumentName && (
+                          <span className="text-[9px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-mono">
+                            Rev of: {log.previousDocumentName}
+                          </span>
+                        )}
+                        <span className="text-[10px] bg-[#221A17] border border-[#382B25] px-1.5 py-0.2 rounded text-stone-300 font-mono">
+                          {log.date} @ {log.dispatchTime}
+                        </span>
+                        <span className="text-[10px] text-[#FFA594] font-semibold">
+                          {log.outletNames.join(', ')}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-stone-400 mt-1">
+                        Driver: <span className="text-stone-300">{log.driverName}</span> - Supervisor: <span className="text-stone-300">{log.supervisor}</span> - {log.items.length} product line(s) ({log.items.reduce((s, i) => s + (i.quantity || 0), 0)} units)
+                      </p>
+                    </div>
+                    {(hasAccess('reports', 'view') || hasAccess('forms', 'view')) && (
+                      <button
+                        onClick={() => onNavigate(hasAccess('reports', 'view') ? 'reports' : 'forms')}
+                        className="text-xs bg-[#221A17] hover:bg-[#2C211D] border border-[#382B25] text-stone-300 hover:text-white px-2.5 py-1 rounded transition cursor-pointer self-start sm:self-auto shrink-0"
+                      >
+                        Details
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

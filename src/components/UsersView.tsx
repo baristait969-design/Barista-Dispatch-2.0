@@ -16,7 +16,8 @@ import {
   Search,
   UserCheck,
   UserX,
-  Filter
+  Filter,
+  X
 } from 'lucide-react';
 import { UserProfile, UserRole, ModulePermissions } from '../types';
 import { 

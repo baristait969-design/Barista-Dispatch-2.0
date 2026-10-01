@@ -12,13 +12,18 @@ import {
   Package, 
   FileText, 
   Search,
-  Lock
+  Lock,
+  Boxes,
+  Calendar,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { DispatchLog, InventoryBatch, Outlet, Driver, UserProfile } from '../types';
 import { PrintableDispatchSheet } from './PrintableDispatchSheet';
 import { PrintableExecutiveReportModal } from './PrintableExecutiveReportModal';
 import { BaristaLogo } from './BaristaLogo';
 import { generateExecutiveReportPDF, generateSingleDispatchPDF } from '../utils/pdfExport';
+import { getDispatchReportNo, getDispatchDocumentName } from '../utils/dispatchNumberUtils';
 import { useModal } from '../context/ModalDialogContext';
 
 interface ReportsViewProps {
@@ -64,7 +69,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
   const [activeReportTab, setActiveReportTab] = useState<'dispatch_log' | 'outlets' | 'products'>('dispatch_log');
 
-  const [datePreset, setDatePreset] = useState<'today' | '7days' | '30days' | 'all' | 'custom'>('all');
+  const todayStr = new Date().toISOString().split('T')[0];
+  const currentMonthPrefix = todayStr.substring(0, 7);
+
+  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthPrefix);
+  const [datePreset, setDatePreset] = useState<'month' | 'today' | '7days' | '30days' | 'all' | 'custom'>('month');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [selectedOutletFilter, setSelectedOutletFilter] = useState<string>('all');
@@ -75,10 +84,74 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   const [selectedLogForPrint, setSelectedLogForPrint] = useState<DispatchLog | null>(null);
   const [showExecutiveReportModal, setShowExecutiveReportModal] = useState<boolean>(false);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const formatMonthLabel = (mStr: string) => {
+    if (!mStr || mStr === 'all') return 'All Historical Records';
+    try {
+      const [year, month] = mStr.split('-');
+      const date = new Date(parseInt(year, 10), parseInt(month, 10) - 1, 1);
+      return date.toLocaleString('default', { month: 'long', year: 'numeric' });
+    } catch {
+      return mStr;
+    }
+  };
+
+  const monthOptions = useMemo(() => {
+    const set = new Set<string>();
+    set.add(currentMonthPrefix);
+    
+    dispatchLogs.forEach(log => {
+      const d = log.date || log.createdAt;
+      if (d && d.length >= 7) {
+        set.add(d.substring(0, 7));
+      }
+    });
+
+    const now = new Date();
+    for (let i = 1; i <= 6; i++) {
+      const past = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const str = `${past.getFullYear()}-${String(past.getMonth() + 1).padStart(2, '0')}`;
+      set.add(str);
+    }
+
+    return Array.from(set).sort().reverse().map(m => ({
+      value: m,
+      label: formatMonthLabel(m)
+    }));
+  }, [dispatchLogs, currentMonthPrefix]);
+
+  const goToPreviousMonth = () => {
+    if (selectedMonth === 'all') {
+      setSelectedMonth(currentMonthPrefix);
+      return;
+    }
+    const [year, month] = selectedMonth.split('-').map(Number);
+    const d = new Date(year, month - 2, 1);
+    const prevStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    setSelectedMonth(prevStr);
+  };
+
+  const goToNextMonth = () => {
+    if (selectedMonth === 'all') {
+      setSelectedMonth(currentMonthPrefix);
+      return;
+    }
+    const [year, month] = selectedMonth.split('-').map(Number);
+    const d = new Date(year, month, 1);
+    const nextStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    setSelectedMonth(nextStr);
+  };
 
   const filteredLogs = useMemo(() => {
     return dispatchLogs.filter(log => {
+      // Monthly cycle filter
+      if (selectedMonth !== 'all') {
+        const matchesMonth = Boolean(
+          (log.date && log.date.startsWith(selectedMonth)) ||
+          (log.createdAt && log.createdAt.startsWith(selectedMonth))
+        );
+        if (!matchesMonth) return false;
+      }
+
       if (datePreset === 'today') {
         if (log.date !== todayStr) return false;
       } else if (datePreset === '7days') {
@@ -112,12 +185,19 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
       if (searchQuery.trim() !== '') {
         const q = searchQuery.toLowerCase();
+        const inDocName = (log.documentName || '').toLowerCase().includes(q);
+        const inRepNo = (log.reportNo || '').toLowerCase().includes(q);
+        const inPrevDoc = (log.previousDocumentName || '').toLowerCase().includes(q);
+        const inRev = (log.revision || '').toLowerCase().includes(q);
+        const inVer = (log.version || '').toLowerCase().includes(q);
         const inDoc = log.docNo.toLowerCase().includes(q);
         const inDriver = log.driverName.toLowerCase().includes(q);
         const inSupervisor = log.supervisor.toLowerCase().includes(q);
         const inOutlets = log.outletNames.some(o => o.toLowerCase().includes(q));
         const inItems = log.items.some(i => i.productName.toLowerCase().includes(q) || i.batchNo.toLowerCase().includes(q));
-        if (!inDoc && !inDriver && !inSupervisor && !inOutlets && !inItems) return false;
+        const inLogId = (log.id || '').toLowerCase().includes(q);
+        const inPrevLogId = (log.previousDocId || '').toLowerCase().includes(q);
+        if (!inDocName && !inRepNo && !inPrevDoc && !inRev && !inVer && !inDoc && !inDriver && !inSupervisor && !inOutlets && !inItems && !inLogId && !inPrevLogId) return false;
       }
 
       return true;
@@ -211,7 +291,12 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     }
 
     const headers = [
-      'Document No',
+      'Document Name',
+      'Report No',
+      'Revision',
+      'Version',
+      'Previous Document',
+      'HACCP Code',
       'Date',
       'Dispatch Time',
       'Outlets Delivered',
@@ -228,9 +313,19 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
     const rows: any[] = [];
     filteredLogs.forEach(log => {
+      const docName = log.documentName || getDispatchDocumentName(log);
+      const repNo = log.reportNo || getDispatchReportNo(log);
+      const rev = log.revision || 'Rev 01';
+      const ver = log.version || '01';
+
       log.items.forEach(item => {
         if (item.quantity > 0) {
           rows.push([
+            `"${docName}"`,
+            `"${repNo}"`,
+            `"${rev}"`,
+            `"${ver}"`,
+            `"${log.previousDocumentName || 'N/A'}"`,
             `"${log.docNo}"`,
             `"${log.date}"`,
             `"${log.dispatchTime}"`,
@@ -335,7 +430,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             outletsCount: outletStats.length
           }}
           generatedBy={userProfile?.displayName || userProfile?.email || 'Central Kitchen QA Executive'}
-          filterPeriod={datePreset === 'today' ? `Today (${todayStr})` : datePreset === '7days' ? 'Last 7 Days' : datePreset === '30days' ? 'Last 30 Days' : 'Full Historical Dataset'}
+          filterPeriod={selectedMonth === 'all' ? 'All Historical Records' : formatMonthLabel(selectedMonth)}
           onClose={() => setShowExecutiveReportModal(false)}
         />
       )}
@@ -393,11 +488,80 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         </div>
       </div>
 
-      {/* OPERATIONAL KPI CARDS */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
+      {/* MONTHLY CYCLE / PERIOD CONTROLLER (Monthly Changeable Dashboard Overview) */}
+      <div className="bg-[#181311] border border-[#2E221E] rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md print:hidden">
+        <div className="flex items-center space-x-3 self-start sm:self-auto">
+          <div className="w-10 h-10 rounded-xl bg-[#ED5338]/15 border border-[#ED5338]/30 flex items-center justify-center text-[#ED5338] shrink-0">
+            <Calendar className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-stone-200">
+                Monthly QA & Dispatch Summary
+              </span>
+              <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/25 px-2 py-0.5 rounded font-mono font-bold">
+                {selectedMonth === 'all' ? 'All Historical Records' : formatMonthLabel(selectedMonth)}
+              </span>
+            </div>
+            <p className="text-[11px] text-stone-400 mt-0.5">
+              {selectedMonth === 'all' 
+                ? 'Displaying cumulative operational metrics across all historical dispatches.'
+                : `Displaying operational metrics, food safety adherence, and retail output for ${formatMonthLabel(selectedMonth)}.`}
+            </p>
+          </div>
+        </div>
+
+        {/* Monthly Switcher (Changeable) */}
+        <div className="flex items-center space-x-2 bg-stone-950 border border-stone-800 rounded-xl p-1.5 shrink-0 self-stretch sm:self-auto justify-between sm:justify-start">
+          <button
+            type="button"
+            onClick={goToPreviousMonth}
+            className="p-1.5 hover:bg-stone-800 text-stone-400 hover:text-white rounded-lg transition cursor-pointer"
+            title="Previous Month"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="bg-transparent text-xs font-bold text-white px-2 py-1 focus:outline-none cursor-pointer font-mono"
+          >
+            {monthOptions.map(opt => (
+              <option key={opt.value} value={opt.value} className="bg-stone-900 text-white">
+                {opt.label}
+              </option>
+            ))}
+            <option value="all" className="bg-stone-900 text-white">All Historical Records</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={goToNextMonth}
+            className="p-1.5 hover:bg-stone-800 text-stone-400 hover:text-white rounded-lg transition cursor-pointer"
+            title="Next Month"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+
+          {selectedMonth !== currentMonthPrefix && (
+            <button
+              type="button"
+              onClick={() => setSelectedMonth(currentMonthPrefix)}
+              className="text-[10px] font-bold text-amber-400 hover:text-amber-300 px-2 py-1 bg-amber-500/10 rounded-lg border border-amber-500/30 transition cursor-pointer ml-1"
+              title="Return to Current Month"
+            >
+              Current Month
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* OPERATIONAL KPI DISPLAY CARDS (Display Only - Not Buttons) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
         <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
           <div className="flex items-center justify-between text-stone-400 text-xs">
-            <span>Total Dispatches</span>
+            <span className="font-semibold text-stone-300">Total Dispatches</span>
             <FileText className="w-4 h-4 text-amber-400" />
           </div>
           <div className="mt-2">
@@ -408,7 +572,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
         <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
           <div className="flex items-center justify-between text-stone-400 text-xs">
-            <span>Total Output</span>
+            <span className="font-semibold text-stone-300">Total Output</span>
             <Package className="w-4 h-4 text-blue-400" />
           </div>
           <div className="mt-2">
@@ -419,7 +583,45 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
         <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
           <div className="flex items-center justify-between text-stone-400 text-xs">
-            <span>Cold-Chain Adherence</span>
+            <span className="font-semibold text-stone-300">Outlets Served</span>
+            <Building2 className="w-4 h-4 text-purple-400" />
+          </div>
+          <div className="mt-2 flex items-baseline justify-between">
+            <div>
+              <span className="text-2xl font-black text-white font-mono">{outletStats.length}</span>
+              <span className="text-[11px] text-stone-500 block">Active branches</span>
+            </div>
+            {deviationCount > 0 ? (
+              <span className="text-[10px] font-bold text-red-400 bg-red-950/80 border border-red-800 px-1.5 py-0.5 rounded">
+                {deviationCount} Alerts
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-1.5 py-0.5 rounded">
+                0 Breaches
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+          <div className="flex items-center justify-between text-stone-400 text-xs">
+            <span className="font-semibold text-stone-300">Products Dispatched</span>
+            <Boxes className="w-4 h-4 text-orange-400" />
+          </div>
+          <div className="mt-2 flex items-baseline justify-between">
+            <div>
+              <span className="text-2xl font-black text-white font-mono">{productStats.length}</span>
+              <span className="text-[11px] text-stone-500 block">Distinct items</span>
+            </div>
+            <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-950/80 border border-amber-800/80 px-1.5 py-0.5 rounded">
+              SKUs Active
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+          <div className="flex items-center justify-between text-stone-400 text-xs">
+            <span className="font-semibold text-stone-300">Cold-Chain Adherence</span>
             <ThermometerSnowflake className="w-4 h-4 text-cyan-400" />
           </div>
           <div className="mt-2">
@@ -432,14 +634,14 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               <span className="text-[10px] text-stone-400 font-mono">OPRP-2 (&lt;= 5.0 C)</span>
             </div>
             <span className="text-[11px] text-emerald-400 font-semibold block">
-              {compliantLogsCount} of {totalDispatches} fully compliant
+              {compliantLogsCount} of {totalDispatches} compliant
             </span>
           </div>
         </div>
 
         <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
           <div className="flex items-center justify-between text-stone-400 text-xs">
-            <span>Avg Dispatch Temp</span>
+            <span className="font-semibold text-stone-300">Avg Dispatch Temp</span>
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="mt-2">
@@ -448,28 +650,6 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               <span className="text-[10px] text-emerald-400 font-mono">Safe</span>
             </div>
             <span className="text-[11px] text-stone-500 block">Max standard: 5.0 C</span>
-          </div>
-        </div>
-
-        <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm col-span-2 lg:col-span-1">
-          <div className="flex items-center justify-between text-stone-400 text-xs">
-            <span>Outlets Serviced</span>
-            <Building2 className="w-4 h-4 text-purple-400" />
-          </div>
-          <div className="mt-2 flex items-baseline justify-between">
-            <div>
-              <span className="text-2xl font-black text-white font-mono">{outletStats.length}</span>
-              <span className="text-[11px] text-stone-500 block">Active branches</span>
-            </div>
-            {deviationCount > 0 ? (
-              <span className="text-[10px] font-bold text-red-400 bg-red-950/80 border border-red-800 px-2 py-0.5 rounded">
-                {deviationCount} Alerts
-              </span>
-            ) : (
-              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-2 py-0.5 rounded">
-                0 Breaches
-              </span>
-            )}
           </div>
         </div>
       </div>
@@ -496,7 +676,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               onChange={(e) => setDatePreset(e.target.value as any)}
               className="w-full px-2.5 py-2 bg-stone-950 border border-stone-700 rounded-lg text-xs text-stone-100 font-medium focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 cursor-pointer"
             >
-              <option value="all" className="bg-stone-900 text-stone-100">All Available Records</option>
+              <option value="month" className="bg-stone-900 text-stone-100">
+                {selectedMonth === 'all' ? 'All Historical Records' : `Selected Month (${formatMonthLabel(selectedMonth)})`}
+              </option>
               <option value="today" className="bg-stone-900 text-stone-100">Today Only ({todayStr})</option>
               <option value="7days" className="bg-stone-900 text-stone-100">Last 7 Days</option>
               <option value="30days" className="bg-stone-900 text-stone-100">Last 30 Days</option>
@@ -559,7 +741,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-2.5" />
               <input
                 type="text"
-                placeholder="Product, Batch, Outlet..."
+                placeholder="Product, Batch, Outlet, Doc ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-8 pr-2.5 py-2 bg-stone-950 border border-stone-700 rounded-lg text-xs text-stone-100 placeholder-stone-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30"
@@ -649,7 +831,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               <table className="w-full text-left text-xs">
                 <thead className="bg-stone-850 text-stone-300 font-bold uppercase tracking-wider border-b border-stone-800 text-[11px]">
                   <tr>
-                    <th className="py-3 px-4">Doc No / Date</th>
+                    <th className="py-3 px-4">Document Ref / Date</th>
                     <th className="py-3 px-4">Destination Outlets</th>
                     <th className="py-3 px-4">Driver & Vehicle</th>
                     <th className="py-3 px-4">Dispatched Items & Qty</th>
@@ -660,14 +842,31 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 </thead>
                 <tbody className="divide-y divide-stone-800">
                   {filteredLogs.map((log) => {
+                    const docName = log.documentName || getDispatchDocumentName(log);
+                    const repNo = log.reportNo || getDispatchReportNo(log);
+                    const rev = log.revision || 'Rev 01';
+                    const ver = log.version || '01';
                     const activeItems = log.items.filter(i => i.quantity > 0);
                     const unitsCount = activeItems.reduce((s, i) => s + i.quantity, 0);
 
                     return (
                       <tr key={log.id} className="hover:bg-stone-800/40 transition">
                         <td className="py-3 px-4">
-                          <span className="font-mono font-bold text-amber-400 text-xs block">{log.docNo}</span>
-                          <span className="text-[11px] text-stone-400 font-mono">
+                          <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                            <span className="font-mono font-black text-amber-400 text-xs">{docName}</span>
+                            <span className="text-[10px] bg-stone-800 border border-stone-700 px-1.5 py-0.2 rounded font-mono text-stone-200 font-bold">
+                              {rev} / {ver}
+                            </span>
+                            <span className="text-[10px] bg-[#221A17] text-[#FFA594] border border-[#382B25] px-1.5 py-0.2 rounded font-mono font-semibold">
+                              #{repNo}
+                            </span>
+                          </div>
+                          {log.previousDocumentName && (
+                            <span className="text-[9px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-mono block w-fit mt-1">
+                              Rev of: {log.previousDocumentName}
+                            </span>
+                          )}
+                          <span className="text-[11px] text-stone-400 font-mono block mt-0.5">
                             {log.date} @ {log.dispatchTime}
                           </span>
                         </td>

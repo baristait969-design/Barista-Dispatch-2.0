@@ -18,7 +18,8 @@ import {
   Driver, 
   DispatchLog, 
   BatchLog, 
-  UserProfile 
+  UserProfile,
+  MonthlyDispatchCycle 
 } from './types';
 import { 
   INITIAL_BATCHES, 
@@ -37,7 +38,10 @@ import {
   subscribeDrivers, 
   subscribeDispatchLogs, 
   subscribeBatchLogs, 
-  subscribeUsers 
+  subscribeUsers,
+  subscribeMonthlyCycle,
+  checkAndApplyAutomaticMonthlyReset,
+  getDefaultMonthlyCycle
 } from './services/dataService';
 import { Loader2, ShieldAlert } from 'lucide-react';
 
@@ -73,9 +77,13 @@ const MainContent: React.FC = () => {
   const [dispatchLogs, setDispatchLogs] = useState<DispatchLog[]>([]);
   const [batchLogs, setBatchLogs] = useState<BatchLog[]>([]);
   const [usersList, setUsersList] = useState<UserProfile[]>(INITIAL_USERS);
+  const [dispatchCycle, setDispatchCycle] = useState<MonthlyDispatchCycle>(getDefaultMonthlyCycle());
 
   useEffect(() => {
     seedInitialDataIfNeeded();
+    checkAndApplyAutomaticMonthlyReset().then((c) => {
+      if (c) setDispatchCycle(c);
+    });
 
     const unsubBatches = subscribeBatches((data) => {
       setBatches(data || []);
@@ -113,6 +121,10 @@ const MainContent: React.FC = () => {
       setUsersList(data || []);
     });
 
+    const unsubCycle = subscribeMonthlyCycle((cycle) => {
+      if (cycle) setDispatchCycle(cycle);
+    });
+
     return () => {
       unsubBatches();
       unsubOutlets();
@@ -121,6 +133,7 @@ const MainContent: React.FC = () => {
       unsubDispatch();
       unsubLogs();
       unsubUsers();
+      unsubCycle();
     };
   }, []);
 
@@ -161,6 +174,7 @@ const MainContent: React.FC = () => {
                 dispatchLogs={dispatchLogs}
                 outlets={outlets}
                 products={products}
+                dispatchCycle={dispatchCycle}
                 onNavigate={(tab) => setCurrentTab(tab)}
               />
             )}

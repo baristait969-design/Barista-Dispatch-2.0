@@ -19,7 +19,9 @@ import {
   Zap,
   Lock,
   X,
-  MapPin
+  MapPin,
+  Edit,
+  Download
 } from 'lucide-react';
 import { InventoryBatch, Outlet, Driver, DispatchLog, DispatchLineItem, Product, UserProfile } from '../types';
 import { INITIAL_PRODUCTS } from '../data/seedData';
@@ -29,6 +31,13 @@ import { DocumentHaccpHeader } from './DocumentHaccpHeader';
 import { getAvailableFIFOBatches, isBatchExpired } from '../utils/batchUtils';
 import { calculateFutureDate } from '../utils/productUtils';
 import { useModal } from '../context/ModalDialogContext';
+import { 
+  generateNextReportNumber, 
+  calculateNextRevisionAndDocName, 
+  getDispatchReportNo, 
+  getDispatchDocumentName 
+} from '../utils/dispatchNumberUtils';
+import { generateSingleDispatchPDF } from '../utils/pdfExport';
 
 interface FormsViewProps {
   batches: InventoryBatch[];
@@ -52,9 +61,29 @@ export const FormsView: React.FC<FormsViewProps> = ({
   const canEdit = hasAccess('forms', 'edit');
 
   const [activeTab, setActiveTab] = useState<'create' | 'submitted'>('create');
-  const [editingLogId, setEditingLogId] = useState<string | null>(null);
+  const [editingLog, setEditingLog] = useState<DispatchLog | null>(null);
+  const [revisionNote, setRevisionNote] = useState<string>('');
+  const editingLogId = editingLog?.id || null;
+
   const [selectedLogForPrint, setSelectedLogForPrint] = useState<DispatchLog | null>(null);
   const [lastSubmittedLog, setLastSubmittedLog] = useState<DispatchLog | null>(null);
+
+  // Compute active report number, revision/version, and document name
+  const activeDocInfo = useMemo(() => {
+    if (editingLog) {
+      return calculateNextRevisionAndDocName(editingLog, dispatchLogs.length + 1);
+    }
+    const reportNo = generateNextReportNumber(dispatchLogs);
+    return {
+      reportNo,
+      revisionNumber: 1,
+      revision: 'Rev 01',
+      version: '01',
+      documentName: reportNo,
+      previousDocId: '',
+      previousDocumentName: ''
+    };
+  }, [editingLog, dispatchLogs]);
 
   const getCurrentTime = () => {
     const d = new Date();
@@ -445,7 +474,7 @@ export const FormsView: React.FC<FormsViewProps> = ({
         isCustom: true
       }]);
     }
-    setEditingLogId(null);
+    setEditingLog(null);
     triggerTimeToast('Reset form to default state (in-stock items only)');
   };
 
@@ -815,64 +844,66 @@ export const FormsView: React.FC<FormsViewProps> = ({
       }
     }
 
+    const isEditMode = Boolean(editingLog);
+    const targetReportNo = activeDocInfo.reportNo;
+    const targetDocName = activeDocInfo.documentName;
+    const targetRevision = activeDocInfo.revision;
+    const targetVersion = activeDocInfo.version;
+    const targetRevNumber = activeDocInfo.revisionNumber;
+    const prevDocId = editingLog?.id;
+    const prevDocName = activeDocInfo.previousDocumentName;
+
     setSubmitting(true);
     setSubmitSuccess(null);
     try {
-      const newLogId = await createDispatchLogWithDeduction(
-        {
-          docNo: 'BCL/REC/HACCP/32',
-          title: 'Central Kitchen Dispatch Log',
-          revision: 'Rev 01',
-          version: '01',
-          effectiveDate: '01 January 2025',
-          haccpLink: 'OPRP-2',
-          approvedBy: 'QA Executive',
-          date,
-          dispatchTime,
-          outletIds: selectedOutletIds,
-          outletNames: selectedOutletNames,
-          driverName: selectedDriverName,
-          vehicleNo,
-          supervisor: supervisorName,
-          supervisorId: supervisorId,
-          supervisorEmail: userProfile?.email || '',
-          items: activeItems,
-          notes,
-          haccpCompliant: activeItems.every(i => i.dispatchTemp <= 5.0),
-          status: 'submitted'
-        },
-        batches
-      );
-
-      const submittedDoc: DispatchLog = {
-        id: newLogId,
+      const dispatchPayload: Omit<DispatchLog, 'id' | 'createdAt'> = {
+        reportNo: targetReportNo,
+        documentName: targetDocName,
         docNo: 'BCL/REC/HACCP/32',
         title: 'Central Kitchen Dispatch Log',
-        revision: 'Rev 01',
-        version: '01',
-        effectiveDate: '01 January 2025',
+        revision: targetRevision,
+        version: targetVersion,
+        revisionNumber: targetRevNumber,
+        effectiveDate: date || '01 January 2025',
         haccpLink: 'OPRP-2',
-        approvedBy: 'QA Executive',
+        approvedBy: supervisorName || 'QA Executive',
         date,
         dispatchTime,
         outletIds: selectedOutletIds,
         outletNames: selectedOutletNames,
         driverName: selectedDriverName,
-        vehicleNo,
+        vehicleNo: vehicleNo || '',
         supervisor: supervisorName,
         supervisorId: supervisorId,
         supervisorEmail: userProfile?.email || '',
         items: activeItems,
-        notes,
+        notes: notes || '',
         haccpCompliant: activeItems.every(i => i.dispatchTemp <= 5.0),
-        status: 'submitted',
+        status: isEditMode ? 'edited' : 'submitted',
+        ...(prevDocId ? { previousDocId: prevDocId } : {}),
+        ...(prevDocName ? { previousDocumentName: prevDocName } : {}),
+        ...(revisionNote.trim() || isEditMode
+          ? { editReason: revisionNote.trim() || 'Dispatched document revised and re-submitted' }
+          : {})
+      };
+
+      const newLogId = await createDispatchLogWithDeduction(dispatchPayload, batches);
+
+      const submittedDoc: DispatchLog = {
+        ...dispatchPayload,
+        id: newLogId,
         createdAt: new Date().toISOString()
       };
 
-      setEditingLogId(null);
+      setEditingLog(null);
+      setRevisionNote('');
       setLastSubmittedLog(submittedDoc);
       setSelectedLogForPrint(submittedDoc);
-      setSubmitSuccess(`Dispatch Log successfully submitted as a new separate record (${newLogId})!`);
+      setSubmitSuccess(
+        isEditMode
+          ? `Separate revised document "${targetDocName}" (${targetRevision} / ${targetVersion}) successfully saved for Report #${targetReportNo}!`
+          : `Dispatch document "${targetDocName}" (Report #${targetReportNo}) successfully submitted and stock deducted!`
+      );
       setLineItems(prev => prev.map(r => ({ ...r, quantity: 0 })));
     } catch (err: any) {
       showAlert('Error submitting dispatch log: ' + err.message, {
@@ -885,7 +916,8 @@ export const FormsView: React.FC<FormsViewProps> = ({
   };
 
   const handleRetrieveForEdit = (log: DispatchLog) => {
-    setEditingLogId(log.id);
+    setEditingLog(log);
+    setRevisionNote(log.editReason || '');
     setDate(log.date);
     setDispatchTime(log.dispatchTime);
     setSelectedOutletIds(log.outletIds);
@@ -1027,66 +1059,141 @@ export const FormsView: React.FC<FormsViewProps> = ({
             </div>
           ) : (
             <div className="divide-y divide-stone-800">
-              {dispatchLogs.map((log) => (
-                <div key={log.id} className="py-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-mono font-bold text-amber-400 text-sm">{log.docNo}</span>
-                      <span className="text-xs bg-stone-800 px-2 py-0.5 rounded text-stone-300">
-                        Date: {log.date} @ {log.dispatchTime}
-                      </span>
-                      <span className="text-xs font-bold text-emerald-400">
-                        {log.haccpCompliant ? 'HACCP Compliant (<= 5.0 C)' : 'Audit Warning'}
-                      </span>
+              {dispatchLogs.map((log) => {
+                const docName = log.documentName || getDispatchDocumentName(log);
+                const repNo = log.reportNo || getDispatchReportNo(log);
+                const rev = log.revision || 'Rev 01';
+                const ver = log.version || '01';
+
+                return (
+                  <div key={log.id} className="py-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                        <span className="font-mono font-black text-amber-400 text-sm">
+                          {docName}
+                        </span>
+                        <span className="text-[10px] bg-stone-800 border border-stone-700 px-2 py-0.5 rounded font-mono text-stone-200 font-bold">
+                          {rev} / {ver}
+                        </span>
+                        <span className="text-[10px] bg-[#221A17] text-[#FFA594] border border-[#382B25] px-1.5 py-0.5 rounded font-mono font-semibold">
+                          Report #{repNo}
+                        </span>
+                        {log.previousDocumentName && (
+                          <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded font-mono">
+                            Rev of: {log.previousDocumentName}
+                          </span>
+                        )}
+                        <span className="text-xs bg-stone-800 px-2 py-0.5 rounded text-stone-300 font-mono">
+                          {log.date} @ {log.dispatchTime}
+                        </span>
+                        <span className={`text-xs font-bold ${log.haccpCompliant ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {log.haccpCompliant ? 'HACCP Compliant (<= 5.0 C)' : 'HACCP Warning'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-stone-300">
+                        <strong>Outlets:</strong> {log.outletNames.join(', ')}
+                      </div>
+                      <div className="text-xs text-stone-400">
+                        Driver: <span className="text-stone-300">{log.driverName}</span> ({log.vehicleNo || 'Van'}) | Supervisor: <span className="text-amber-300">{log.supervisor}</span> | Items: <span className="text-stone-300 font-semibold">{log.items.length} line items ({log.items.reduce((s, i) => s + i.quantity, 0)} units total)</span>
+                        {log.editReason && (
+                          <span className="block text-[11px] text-amber-300/80 italic mt-0.5">
+                            Revision Note: {log.editReason}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-xs text-stone-300">
-                      <strong>Outlets:</strong> {log.outletNames.join(', ')}
-                    </div>
-                    <div className="text-xs text-stone-400">
-                      Driver: <span className="text-stone-300">{log.driverName}</span> ({log.vehicleNo || 'Van'}) | Supervisor: <span className="text-amber-300">{log.supervisor}</span> | Items: <span className="text-stone-300 font-semibold">{log.items.length} line items ({log.items.reduce((s, i) => s + i.quantity, 0)} units total)</span>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <button
+                        onClick={() => handleRetrieveForEdit(log)}
+                        className="px-3 py-1.5 bg-stone-800 hover:bg-stone-750 text-amber-400 border border-stone-700 hover:border-amber-500/50 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer"
+                        title="Load this dispatch data to submit as a new separate revised record with upgraded version"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                        <span>Edit (New Revision)</span>
+                      </button>
+                      <button
+                        onClick={() => setSelectedLogForPrint(log)}
+                        className="px-3 py-1.5 bg-stone-800 hover:bg-stone-750 text-stone-200 border border-stone-700 hover:border-stone-500 rounded-lg text-xs font-medium transition flex items-center space-x-1.5 cursor-pointer"
+                        title="Print official dispatch document for this record"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        <span>Print Sheet</span>
+                      </button>
+                      <button
+                        onClick={() => generateSingleDispatchPDF(log)}
+                        className="px-2.5 py-1.5 bg-stone-800 hover:bg-stone-750 text-emerald-400 border border-stone-700 hover:border-emerald-500/50 rounded-lg text-xs font-medium transition flex items-center space-x-1 cursor-pointer"
+                        title="Download PDF copy"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>PDF</span>
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2 shrink-0">
-                    <button
-                      onClick={() => handleRetrieveForEdit(log)}
-                      className="px-3 py-1.5 bg-stone-800 hover:bg-stone-750 text-amber-400 border border-stone-700 rounded-lg text-xs font-medium transition flex items-center space-x-1.5 cursor-pointer"
-                      title="Load this dispatch data to submit as a new separate dispatch record"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Load into Form</span>
-                    </button>
-                    <button
-                      onClick={() => setSelectedLogForPrint(log)}
-                      className="px-3 py-1.5 bg-stone-800 hover:bg-stone-750 text-amber-400 border border-stone-700 hover:border-amber-500/50 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer"
-                      title="Print official dispatch document for this record"
-                    >
-                      <Printer className="w-3.5 h-3.5" />
-                      <span>Print Sheet</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       ) : (
         <form onSubmit={handleSubmitDispatch} className="space-y-6">
-          {editingLogId && (
-            <div className="p-3 bg-amber-950/70 border border-amber-800 rounded-xl text-amber-200 text-xs flex items-center justify-between print:hidden">
-              <div className="flex items-center space-x-2">
-                <Copy className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>Loaded data from previous log (<strong>{editingLogId}</strong>). Submitting will create a <strong>new separate record</strong> without overwriting the previous one.</span>
+          {editingLog && (
+            <div className="p-4 bg-gradient-to-r from-amber-950/80 via-stone-900 to-stone-900 border-2 border-amber-600/70 rounded-2xl text-amber-200 text-xs shadow-xl print:hidden space-y-3 animate-in fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-800/60 pb-3">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                    <RotateCcw className="w-4 h-4 animate-spin-slow" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-sm text-white block">
+                      Editing Dispatch Archive: <span className="font-mono text-amber-400">{activeDocInfo.reportNo}</span>
+                    </span>
+                    <span className="text-[11px] text-stone-300">
+                      Submitting will create a <strong>separate revised document</strong> with upgraded version <strong className="text-amber-400 font-mono">{activeDocInfo.revision} / {activeDocInfo.version}</strong>
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingLog(null);
+                    setRevisionNote('');
+                    setLineItems(prev => prev.map(r => ({ ...r, quantity: 0 })));
+                  }}
+                  className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white rounded-lg border border-stone-700 text-xs font-semibold transition cursor-pointer self-start sm:self-auto"
+                >
+                  Cancel Edit (New Dispatch)
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingLogId(null);
-                  setLineItems(prev => prev.map(r => ({ ...r, quantity: 0 })));
-                }}
-                className="text-xs text-amber-400 hover:text-white underline cursor-pointer ml-2 shrink-0"
-              >
-                Clear Form
-              </button>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[11px]">
+                <div className="bg-stone-900/90 border border-stone-800 p-2.5 rounded-xl font-mono">
+                  <span className="text-stone-400 block text-[10px] uppercase">Original Archive Record</span>
+                  <span className="font-bold text-white text-xs">{activeDocInfo.previousDocumentName}</span>
+                </div>
+                <div className="bg-stone-900/90 border border-stone-800 p-2.5 rounded-xl font-mono">
+                  <span className="text-stone-400 block text-[10px] uppercase">New Document Name</span>
+                  <span className="font-bold text-amber-400 text-xs">{activeDocInfo.documentName}</span>
+                </div>
+                <div className="bg-stone-900/90 border border-stone-800 p-2.5 rounded-xl font-mono">
+                  <span className="text-stone-400 block text-[10px] uppercase">Revision / Version</span>
+                  <span className="font-bold text-emerald-400 text-xs">{activeDocInfo.revision} / {activeDocInfo.version}</span>
+                  <span className="text-stone-400 block text-[10px]">Report #{activeDocInfo.reportNo}</span>
+                </div>
+              </div>
+
+              <div className="pt-1">
+                <label className="text-[11px] font-semibold text-stone-300 block mb-1">
+                  Reason for Revision / Change Note (Optional):
+                </label>
+                <input
+                  type="text"
+                  value={revisionNote}
+                  onChange={(e) => setRevisionNote(e.target.value)}
+                  placeholder="e.g. Quantity adjusted for outlet request, temperature verified, driver rescheduled"
+                  className="w-full bg-stone-950 border border-stone-700 rounded-lg px-3 py-1.5 text-xs text-stone-200 placeholder-stone-600 focus:outline-none focus:border-amber-500"
+                />
+              </div>
             </div>
           )}
 
@@ -1095,13 +1202,15 @@ export const FormsView: React.FC<FormsViewProps> = ({
               title="Central Kitchen Dispatch Log"
               subtitle="Daily Food Safety & Cold-Chain Logistics Document"
               docCode="BCL/REC/HACCP/32"
+              reportNo={activeDocInfo.reportNo}
+              documentName={activeDocInfo.documentName}
+              previousDocumentName={activeDocInfo.previousDocumentName}
               effectiveDate={date || "01 January 2025"}
-              revision="Rev 01"
-              version="01"
+              revision={activeDocInfo.revision}
+              version={activeDocInfo.version}
               approvedBy={supervisorName || "QA Executive"}
-              refId={editingLogId ? (dispatchLogs.find(l => l.id === editingLogId)?.docNo || 'BCL-CK-DISP') : 'BCL-CK-DISP'}
+              refId={activeDocInfo.documentName}
               haccpLink="OPRP-2 (Cold-Chain <= 5.0 C)"
-              mandateNotice="CRITICAL CONTROL REQUIREMENT: Maximum dispatch transit temperature must remain <= 5.0 C."
               className="mb-5"
             />
 
@@ -1409,12 +1518,12 @@ export const FormsView: React.FC<FormsViewProps> = ({
                 </div>
               </div>
 
-              <div className="rounded-xl border border-stone-800 overflow-hidden">
-                <table className="w-full text-left text-xs">
+              <div className="rounded-xl border border-stone-800 overflow-x-auto">
+                <table className="w-full min-w-[940px] text-left text-xs">
                   <thead className="bg-stone-850 print:bg-gray-100 text-stone-300 print:text-black font-bold uppercase tracking-wider border-b border-stone-700 print:border-black select-none text-[11px]">
                     <tr>
-                      <th className="py-2 px-3 w-[33%]">Product Name</th>
-                      <th className="py-2 px-2.5 w-[14%]">
+                      <th className="py-2.5 px-3 w-[26%] min-w-[200px]">Product Name</th>
+                      <th className="py-2.5 px-2.5 w-[13%] min-w-[120px]">
                         <div className="flex items-center justify-between">
                           <span>Dispatch Time</span>
                           <span className="text-[9px] font-normal text-amber-400 lowercase print:hidden">
@@ -1422,12 +1531,19 @@ export const FormsView: React.FC<FormsViewProps> = ({
                           </span>
                         </div>
                       </th>
-                      <th className="py-2 px-2.5 w-[12%]">Batch No</th>
-                      <th className="py-2 px-2 w-[11%] text-center">Qty</th>
-                      <th className="py-2 px-2 w-[10%] text-center">Prod. Date</th>
-                      <th className="py-2 px-2 w-[10%] text-center">Exp. Date</th>
-                      <th className="py-2 px-2 w-[8%] text-center">Temp C</th>
-                      <th className="py-2 px-1.5 w-7 text-right print:hidden"></th>
+                      <th className="py-2.5 px-3 w-[23%] min-w-[190px]">
+                        <div className="flex items-center space-x-1">
+                          <span>Batch No</span>
+                          <span className="text-[9px] font-normal text-amber-400 lowercase print:hidden font-mono">
+                            (stock select)
+                          </span>
+                        </div>
+                      </th>
+                      <th className="py-2.5 px-2 w-[10%] min-w-[90px] text-center">Qty</th>
+                      <th className="py-2.5 px-2 w-[10%] min-w-[90px] text-center">Prod. Date</th>
+                      <th className="py-2.5 px-2 w-[10%] min-w-[90px] text-center">Exp. Date</th>
+                      <th className="py-2.5 px-2 w-[8%] min-w-[70px] text-center">Temp C</th>
+                      <th className="py-2.5 px-1.5 w-7 text-right print:hidden"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-800 print:divide-black">
@@ -1546,7 +1662,7 @@ export const FormsView: React.FC<FormsViewProps> = ({
                               </button>
                             </div>
                           </td>
-                          <td className="py-2 px-2.5">
+                          <td className="py-2 px-3">
                             {!item.productName ? (
                               <div className="px-2 py-1 bg-stone-900/60 border border-stone-800 rounded text-stone-500 font-mono text-xs italic">
                                 Select product first
@@ -1556,11 +1672,11 @@ export const FormsView: React.FC<FormsViewProps> = ({
                                 Out of Stock (0)
                               </div>
                             ) : (
-                              <div>
+                              <div className="w-full">
                                 <select
                                   value={item.batchNo || (availableBatches[0] ? availableBatches[0].batchNo : '')}
                                   onChange={(e) => handleBatchSelect(item.id, e.target.value)}
-                                  className="w-full px-2 py-1 bg-stone-800 print:bg-white border border-stone-700 print:border-black rounded text-xs text-amber-400 print:text-black font-mono font-bold focus:outline-none focus:border-amber-500 cursor-pointer shadow-sm truncate"
+                                  className="w-full px-2.5 py-1.5 bg-stone-800 print:bg-white border border-stone-700 print:border-black rounded-lg text-xs text-amber-400 print:text-black font-mono font-bold focus:outline-none focus:border-amber-500 cursor-pointer shadow-sm"
                                 >
                                   {availableBatches.map((b) => {
                                     const isUsedInOther = otherRowBatchNos.includes(b.batchNo);

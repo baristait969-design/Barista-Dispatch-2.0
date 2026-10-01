@@ -6,6 +6,9 @@ export interface DocumentHaccpHeaderProps {
   title: string;
   subtitle?: string;
   docCode?: string;
+  reportNo?: string;
+  documentName?: string;
+  previousDocumentName?: string;
   effectiveDate?: string;
   revision?: string;
   version?: string;
@@ -13,6 +16,7 @@ export interface DocumentHaccpHeaderProps {
   refId?: string;
   haccpLink?: string;
   mandateNotice?: string;
+  showMandateNotice?: boolean;
   className?: string;
   variant?: 'dark' | 'paper' | 'auto';
 }
@@ -21,17 +25,22 @@ export const DocumentHaccpHeader: React.FC<DocumentHaccpHeaderProps> = ({
   title = 'Central Kitchen Dispatch Log & Receipt',
   subtitle = 'Quality Assurance & Cold-Chain Food Safety Management',
   docCode = 'BCL/REC/HACCP/32',
+  reportNo,
+  documentName,
+  previousDocumentName,
   effectiveDate = '01 January 2025',
   revision = 'Rev 01',
   version = '01',
   approvedBy = 'QA Executive',
   refId,
   haccpLink = 'OPRP-2 (Cold-Chain <= 5.0 C)',
-  mandateNotice = 'CRITICAL CONTROL REQUIREMENT: Maximum dispatch transit temperature must remain <= 5.0 C.',
+  mandateNotice,
+  showMandateNotice = false,
   className = '',
   variant = 'dark'
 }) => {
   const isDark = variant === 'dark' || variant === 'auto';
+  const displayDocRef = documentName || refId || reportNo || 'BCL-CK-DISP';
 
   if (!isDark) {
     // Official White Paper Variant
@@ -65,6 +74,16 @@ export const DocumentHaccpHeader: React.FC<DocumentHaccpHeaderProps> = ({
             <div className="inline-flex items-center justify-center px-2.5 py-0.5 bg-[#ED5338]/10 print:bg-stone-100 text-[#ED5338] print:text-black border border-[#ED5338]/30 print:border-black rounded text-[9.5px] print:text-[8.5px] font-bold font-mono">
               {haccpLink}
             </div>
+            {displayDocRef && displayDocRef !== 'BCL-CK-DISP' && (
+              <div className="text-[10px] font-mono font-bold text-stone-900 print:text-black mt-1">
+                Doc Ref: {displayDocRef}
+              </div>
+            )}
+            {previousDocumentName && (
+              <div className="text-[9px] font-mono text-stone-600 print:text-stone-800 bg-stone-100 px-1.5 py-0.2 rounded border border-stone-300 print:border-black mt-0.5">
+                Rev of: {previousDocumentName}
+              </div>
+            )}
             {subtitle && (
               <p className="text-[9px] print:text-[8px] text-stone-600 print:text-stone-800 mt-1 print:mt-0.5 max-w-[260px]">
                 {subtitle}
@@ -91,7 +110,7 @@ export const DocumentHaccpHeader: React.FC<DocumentHaccpHeaderProps> = ({
               </div>
               <div className="px-1 flex flex-col items-center justify-center">
                 <span className="text-[8.5px] text-stone-500 print:text-stone-700 uppercase">Revision / Ver</span>
-                <span className="font-mono font-semibold text-stone-800 print:text-black text-[10px]">
+                <span className="font-mono font-bold text-stone-900 print:text-black text-[10px]">
                   {revision} / {version}
                 </span>
               </div>
@@ -105,23 +124,25 @@ export const DocumentHaccpHeader: React.FC<DocumentHaccpHeaderProps> = ({
               </div>
               <div className="px-1 flex flex-col items-center justify-center">
                 <span className="text-[8.5px] text-stone-500 print:text-stone-700 uppercase">Document Ref</span>
-                <span className="font-mono font-bold text-stone-800 print:text-black text-[10px] truncate max-w-[105px]">
-                  {refId || 'BCL-CK-DISP'}
+                <span className="font-mono font-bold text-stone-800 print:text-black text-[10px] truncate max-w-[105px]" title={displayDocRef}>
+                  {displayDocRef}
                 </span>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-stone-100 print:bg-white p-2 border-t-2 border-stone-900 print:border-black flex flex-wrap items-center justify-center text-center text-[10px] sm:text-[10.5px] px-3 gap-2">
-          <ThermometerSnowflake className="w-3.5 h-3.5 text-blue-700 print:text-black shrink-0" />
-          <span className="font-semibold text-stone-800 print:text-black">
-            {mandateNotice}
-          </span>
-          <span className="font-mono text-[9px] font-bold uppercase tracking-wider text-stone-700 bg-stone-200/90 print:border print:border-black px-1.5 py-0.2 rounded">
-            OPRP-2
-          </span>
-        </div>
+        {showMandateNotice && mandateNotice && (
+          <div className="bg-stone-100 print:bg-white p-2 border-t-2 border-stone-900 print:border-black flex flex-wrap items-center justify-center text-center text-[10px] sm:text-[10.5px] px-3 gap-2">
+            <ThermometerSnowflake className="w-3.5 h-3.5 text-blue-700 print:text-black shrink-0" />
+            <span className="font-semibold text-stone-800 print:text-black">
+              {mandateNotice}
+            </span>
+            <span className="font-mono text-[9px] font-bold uppercase tracking-wider text-stone-700 bg-stone-200/90 print:border print:border-black px-1.5 py-0.2 rounded">
+              OPRP-2
+            </span>
+          </div>
+        )}
       </header>
     );
   }
@@ -157,6 +178,16 @@ export const DocumentHaccpHeader: React.FC<DocumentHaccpHeaderProps> = ({
           <div className="inline-flex items-center justify-center px-2.5 py-0.5 bg-[#ED5338]/20 print:bg-stone-100 text-[#FF7A63] print:text-black border border-[#ED5338]/40 print:border-black rounded text-[9.5px] print:text-[8.5px] font-bold font-mono shadow-sm">
             {haccpLink}
           </div>
+          {displayDocRef && displayDocRef !== 'BCL-CK-DISP' && (
+            <div className="text-[10.5px] font-mono font-bold text-amber-400 print:text-black mt-1">
+              Doc Ref: {displayDocRef}
+            </div>
+          )}
+          {previousDocumentName && (
+            <div className="text-[9px] font-mono text-amber-300/90 print:text-stone-700 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/30 print:border-black mt-0.5">
+              Rev of: {previousDocumentName}
+            </div>
+          )}
           {subtitle && (
             <p className="text-[9px] print:text-[8px] text-stone-300 print:text-stone-800 mt-1 print:mt-0.5 max-w-[280px]">
               {subtitle}
@@ -183,7 +214,7 @@ export const DocumentHaccpHeader: React.FC<DocumentHaccpHeaderProps> = ({
             </div>
             <div className="px-1 flex flex-col items-center justify-center">
               <span className="text-[8.5px] text-stone-400 print:text-stone-700 uppercase">Revision / Ver</span>
-              <span className="font-mono font-semibold text-stone-200 print:text-black text-[10px]">
+              <span className="font-mono font-bold text-amber-400 print:text-black text-[10px]">
                 {revision} / {version}
               </span>
             </div>
@@ -197,23 +228,25 @@ export const DocumentHaccpHeader: React.FC<DocumentHaccpHeaderProps> = ({
             </div>
             <div className="px-1 flex flex-col items-center justify-center">
               <span className="text-[8.5px] text-stone-400 print:text-stone-700 uppercase">Document Ref</span>
-              <span className="font-mono font-bold text-stone-200 print:text-black text-[10px] truncate max-w-[105px]">
-                {refId || 'BCL-CK-DISP'}
+              <span className="font-mono font-bold text-amber-400 print:text-black text-[10px] truncate max-w-[105px]" title={displayDocRef}>
+                {displayDocRef}
               </span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-[#140F0D] print:bg-white p-2.5 border-t border-[#382B25] print:border-t-2 print:border-black flex flex-wrap items-center justify-center text-center text-[10px] sm:text-[10.5px] px-3 gap-2">
-        <ThermometerSnowflake className="w-3.5 h-3.5 text-cyan-400 print:text-black shrink-0" />
-        <span className="font-semibold text-stone-200 print:text-black">
-          {mandateNotice}
-        </span>
-        <span className="font-mono text-[9px] font-bold uppercase tracking-wider text-amber-300 bg-amber-500/20 border border-amber-500/40 print:border-black print:text-black print:bg-stone-200/90 px-1.5 py-0.2 rounded shadow-sm">
-          OPRP-2
-        </span>
-      </div>
+      {showMandateNotice && mandateNotice && (
+        <div className="bg-[#140F0D] print:bg-white p-2.5 border-t border-[#382B25] print:border-t-2 print:border-black flex flex-wrap items-center justify-center text-center text-[10px] sm:text-[10.5px] px-3 gap-2">
+          <ThermometerSnowflake className="w-3.5 h-3.5 text-cyan-400 print:text-black shrink-0" />
+          <span className="font-semibold text-stone-200 print:text-black">
+            {mandateNotice}
+          </span>
+          <span className="font-mono text-[9px] font-bold uppercase tracking-wider text-amber-300 bg-amber-500/20 border border-amber-500/40 print:border-black print:text-black print:bg-stone-200/90 px-1.5 py-0.2 rounded shadow-sm">
+            OPRP-2
+          </span>
+        </div>
+      )}
     </header>
   );
 };

@@ -5,6 +5,7 @@ import { BaristaLogo } from './BaristaLogo';
 import { DocumentHaccpHeader } from './DocumentHaccpHeader';
 import { generateSingleDispatchPDF } from '../utils/pdfExport';
 import { printHtmlElement, syncToPrintRoot, clearPrintRoot } from '../utils/printUtils';
+import { getDispatchReportNo, getDispatchDocumentName } from '../utils/dispatchNumberUtils';
 
 interface PrintableDispatchSheetProps {
   dispatchLog: Partial<DispatchLog> & {
@@ -27,6 +28,11 @@ export const PrintableDispatchSheet: React.FC<PrintableDispatchSheetProps> = ({
 }) => {
   const activeItems = dispatchLog.items.filter(item => item.quantity > 0);
   const totalUnits = activeItems.reduce((acc, item) => acc + item.quantity, 0);
+
+  const reportNo = dispatchLog.reportNo || getDispatchReportNo(dispatchLog);
+  const documentName = dispatchLog.documentName || getDispatchDocumentName(dispatchLog);
+  const revision = dispatchLog.revision || 'Rev 01';
+  const version = dispatchLog.version || '01';
 
   const getDocFilenameTitle = () => {
     let outlet = '';
@@ -73,11 +79,21 @@ export const PrintableDispatchSheet: React.FC<PrintableDispatchSheetProps> = ({
         <div className="flex items-center justify-between pb-4 mb-4 border-b border-[#2C211C] print:hidden">
           <div className="flex items-center space-x-2.5">
             <BaristaLogo className="w-7 h-7 shadow-sm" />
-            <span className="bg-[#ED5338]/15 text-[#FFA594] border border-[#ED5338]/30 text-xs px-2.5 py-1 rounded-md font-bold font-mono">
-              HACCP BCL/REC/HACCP/32
-            </span>
-            <span className="text-xs text-stone-400 font-medium hidden sm:inline">
-              Official Printed Dispatch Sheet (Selected Items Only)
+            <div className="flex items-center space-x-2">
+              <span className="bg-[#ED5338]/15 text-[#FFA594] border border-[#ED5338]/30 text-xs px-2.5 py-1 rounded-md font-bold font-mono">
+                {documentName}
+              </span>
+              <span className="text-[11px] bg-stone-800 text-stone-300 border border-stone-700 px-2 py-0.5 rounded font-mono font-semibold">
+                {revision} / {version}
+              </span>
+              {dispatchLog.previousDocumentName && (
+                <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-mono hidden md:inline">
+                  Revision of: {dispatchLog.previousDocumentName}
+                </span>
+              )}
+            </div>
+            <span className="text-xs text-stone-400 font-medium hidden lg:inline">
+              Official Printed Dispatch Sheet
             </span>
           </div>
 
@@ -116,13 +132,15 @@ export const PrintableDispatchSheet: React.FC<PrintableDispatchSheetProps> = ({
             title="Dispatch Log & Receipt"
             subtitle="Central Kitchen Cold-Chain Logistics & Dispatch Custody"
             docCode="BCL/REC/HACCP/32"
+            reportNo={reportNo}
+            documentName={documentName}
+            previousDocumentName={dispatchLog.previousDocumentName}
             effectiveDate={dispatchLog.date || "01 January 2025"}
-            revision="Rev 01"
-            version="01"
+            revision={revision}
+            version={version}
             approvedBy={dispatchLog.supervisor || "QA Executive"}
-            refId={dispatchLog.docNo || dispatchLog.id || `DSP-${Date.now().toString().slice(-6)}`}
+            refId={documentName}
             haccpLink="OPRP-2 (Cold-Chain <= 5.0 C)"
-            mandateNotice="CRITICAL CONTROL REQUIREMENT: Maximum dispatch transit temperature must remain <= 5.0 C"
             className="mb-4 print:mb-3.5"
             variant="paper"
           />
@@ -188,8 +206,8 @@ export const PrintableDispatchSheet: React.FC<PrintableDispatchSheetProps> = ({
                 <thead>
                   <tr className="bg-stone-100 text-stone-900 border-b-2 border-stone-900 font-bold uppercase text-[10px] tracking-wider">
                     <th className="p-2 border-r border-stone-400 w-8 text-center">#</th>
-                    <th className="p-2 border-r border-stone-400 w-[38%] min-w-[200px]">Product Description</th>
-                    <th className="p-2 border-r border-stone-400 w-16 text-center">Batch No</th>
+                    <th className="p-2 border-r border-stone-400 w-[35%] min-w-[190px]">Product Description</th>
+                    <th className="p-2 border-r border-stone-400 w-24 min-w-[90px] text-center">Batch No</th>
                     <th className="p-2 border-r border-stone-400 w-18 text-center">Dispatch Time</th>
                     <th className="p-2 border-r border-stone-400 w-22 text-center">Prod Date</th>
                     <th className="p-2 border-r border-stone-400 w-22 text-center">Expiration Date</th>

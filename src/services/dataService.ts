@@ -12,7 +12,7 @@ import {
   writeBatch 
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { InventoryBatch, BatchLog, Outlet, Product, DispatchLog, Driver, UserProfile, UserRole } from '../types';
+import { InventoryBatch, BatchLog, Outlet, Product, DispatchLog, Driver, UserProfile, UserRole, MonthlyDispatchCycle } from '../types';
 import { INITIAL_BATCHES, INITIAL_OUTLETS, INITIAL_DRIVERS, INITIAL_USERS, INITIAL_PRODUCT_CATALOG } from '../data/seedData';
 import { getProductKeyCode } from '../utils/batchUtils';
 
@@ -24,6 +24,28 @@ const PRODUCTS_COL = 'products';
 const DISPATCH_COL = 'dispatch_logs';
 const DRIVERS_COL = 'drivers';
 const USERS_COL = 'users';
+
+/**
+ * Deeply strips `undefined` keys and cleans data so Firestore setDoc/updateDoc never errors on unsupported undefined fields.
+ */
+export function sanitizeForFirestore<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeForFirestore(item)) as unknown as T;
+  }
+  if (typeof obj === 'object' && !(obj instanceof Date)) {
+    const cleaned: Record<string, any> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, any>)) {
+      if (value !== undefined) {
+        cleaned[key] = sanitizeForFirestore(value);
+      }
+    }
+    return cleaned as T;
+  }
+  return obj;
+}
 
 // Seed Database with initial Barista Central Kitchen items if empty
 export async function seedInitialDataIfNeeded(): Promise<boolean> {
@@ -756,44 +778,76 @@ export async function createDispatchLogWithDeduction(
 ): Promise<string> {
   const dispatchId = `disp-${Date.now()}`;
   try {
-    const fullLog: DispatchLog = {
+    const fullLog: DispatchLog = sanitizeForFirestore({
       ...dispatchData,
       id: dispatchId,
       createdAt: new Date().toISOString()
-    };
+    });
 
-    // 1. Save Dispatch Document
+    // 1. Save Dispatch Document as a separate new document
     await setDoc(doc(db, DISPATCH_COL, dispatchId), fullLog);
 
-    // 2. Adjust inventory quantities for each item dispatched
+    // 2. If this is an edited revision from a previous document, link it
+    let previousItemsMap: Record<string, number> = {};
+    if (dispatchData.previousDocId) {
+      try {
+        const prevDocSnap = await getDoc(doc(db, DISPATCH_COL, dispatchData.previousDocId));
+        if (prevDocSnap.exists()) {
+          const prevData = prevDocSnap.data() as DispatchLog;
+          (prevData.items || []).forEach(it => {
+            if (it.batchNo) {
+              previousItemsMap[it.batchNo] = (previousItemsMap[it.batchNo] || 0) + (it.quantity || 0);
+            }
+          });
+
+          // Mark previous document as superseded by the new revision
+          await updateDoc(doc(db, DISPATCH_COL, dispatchData.previousDocId), sanitizeForFirestore({
+            supersededBy: dispatchId,
+            supersededByDocName: fullLog.documentName,
+            latestRevision: fullLog.revision,
+            updatedAt: new Date().toISOString()
+          }));
+        }
+      } catch (prevErr) {
+        console.warn('Could not read or link previous dispatch document:', prevErr);
+      }
+    }
+
+    // 3. Reconcile or adjust inventory quantities for each item dispatched
+    const isRevision = Boolean(dispatchData.previousDocId);
     for (const item of dispatchData.items) {
-      if (!item.batchNo || !item.quantity || item.quantity <= 0) continue;
+      if (!item.batchNo) continue;
       
       const targetBatch = batches.find(b => b.batchNo === item.batchNo || b.id === item.batchId);
       if (targetBatch) {
-        const prevQty = targetBatch.quantity;
-        const newQty = Math.max(0, prevQty - item.quantity);
+        const prevLoggedQty = isRevision ? (previousItemsMap[item.batchNo] || 0) : 0;
+        const netDifference = (item.quantity || 0) - prevLoggedQty;
 
-        const batchRef = doc(db, BATCHES_COL, targetBatch.id);
-        await updateDoc(batchRef, {
-          quantity: newQty,
-          updatedAt: new Date().toISOString()
-        });
+        if (netDifference !== 0) {
+          const prevQty = targetBatch.quantity;
+          const newQty = Math.max(0, prevQty - netDifference);
 
-        await addBatchLog({
-          batchId: targetBatch.id,
-          batchNo: targetBatch.batchNo,
-          productName: item.productName || targetBatch.productName,
-          action: 'dispatch_deduction',
-          quantityChanged: -item.quantity,
-          previousQty: prevQty,
-          newQty: newQty,
-          referenceId: dispatchId,
-          outletName: dispatchData.outletNames.join(', '),
-          driverName: dispatchData.driverName,
-          recordedBy: dispatchData.supervisor,
-          timestamp: new Date().toISOString()
-        });
+          const batchRef = doc(db, BATCHES_COL, targetBatch.id);
+          await updateDoc(batchRef, {
+            quantity: newQty,
+            updatedAt: new Date().toISOString()
+          });
+
+          await addBatchLog({
+            batchId: targetBatch.id,
+            batchNo: targetBatch.batchNo,
+            productName: item.productName || targetBatch.productName,
+            action: netDifference > 0 ? 'dispatch_deduction' : 'manual_adjustment',
+            quantityChanged: -netDifference,
+            previousQty: prevQty,
+            newQty: newQty,
+            referenceId: dispatchId,
+            outletName: dispatchData.outletNames.join(', '),
+            driverName: dispatchData.driverName,
+            recordedBy: dispatchData.supervisor,
+            timestamp: new Date().toISOString()
+          });
+        }
       }
     }
 
@@ -809,14 +863,173 @@ export async function updateDispatchLog(
   updates: Partial<DispatchLog>
 ): Promise<void> {
   try {
-    await updateDoc(doc(db, DISPATCH_COL, id), {
+    const cleanUpdates = sanitizeForFirestore({
       ...updates,
       status: 'edited',
       updatedAt: new Date().toISOString()
     });
+    await updateDoc(doc(db, DISPATCH_COL, id), cleanUpdates);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `${DISPATCH_COL}/${id}`);
     throw error;
+  }
+}
+
+export async function deleteDispatchLog(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, DISPATCH_COL, id));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `${DISPATCH_COL}/${id}`);
+    throw error;
+  }
+}
+
+// ----------------- MONTHLY DISPATCH CYCLE (Resets each month 1st @ 12:00 AM) -----------------
+const CYCLE_STORAGE_KEY = 'barista_monthly_dispatch_cycle';
+
+export function getDefaultMonthlyCycle(): MonthlyDispatchCycle {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const cycleMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
+  const firstOfMonth = new Date(year, month, 1, 0, 0, 0, 0);
+
+  return {
+    lastResetAt: firstOfMonth.toISOString(),
+    resetBy: 'Automated System (1st 12:00 AM)',
+    resetReason: 'Monthly 1st 12:00 AM automatic cycle rollover',
+    cycleMonth,
+    archivedCount: 0
+  };
+}
+
+export function subscribeMonthlyCycle(callback: (cycle: MonthlyDispatchCycle) => void): () => void {
+  try {
+    const cached = localStorage.getItem(CYCLE_STORAGE_KEY);
+    if (cached) {
+      callback(JSON.parse(cached));
+    } else {
+      callback(getDefaultMonthlyCycle());
+    }
+  } catch (e) {
+    callback(getDefaultMonthlyCycle());
+  }
+
+  const cycleDocRef = doc(db, 'system_metadata', 'dispatch_cycle');
+  return onSnapshot(
+    cycleDocRef,
+    (snap) => {
+      if (snap.exists()) {
+        const data = snap.data() as MonthlyDispatchCycle;
+        try {
+          localStorage.setItem(CYCLE_STORAGE_KEY, JSON.stringify(data));
+        } catch (_) {}
+        callback(data);
+      } else {
+        const def = getDefaultMonthlyCycle();
+        callback(def);
+      }
+    },
+    (err) => {
+      console.warn('Could not subscribe to dispatch_cycle in Firestore, using local fallback:', err);
+    }
+  );
+}
+
+export async function resetMonthlyDispatchCycle(
+  performedBy: string,
+  purgeDispatches: boolean = false,
+  reason: string = 'Manual Admin Reset'
+): Promise<MonthlyDispatchCycle> {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const cycleMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+  const cycleData: MonthlyDispatchCycle = {
+    lastResetAt: now.toISOString(),
+    resetBy: performedBy || 'Admin',
+    resetReason: reason,
+    cycleMonth,
+    archivedCount: 0
+  };
+
+  try {
+    if (purgeDispatches) {
+      const snap = await getDocs(collection(db, DISPATCH_COL));
+      if (!snap.empty) {
+        let batch = writeBatch(db);
+        let count = 0;
+        const promises = [];
+        for (const d of snap.docs) {
+          batch.delete(d.ref);
+          count++;
+          if (count >= 400) {
+            promises.push(batch.commit());
+            batch = writeBatch(db);
+            count = 0;
+          }
+        }
+        if (count > 0) promises.push(batch.commit());
+        await Promise.all(promises);
+      }
+    }
+
+    await setDoc(doc(db, 'system_metadata', 'dispatch_cycle'), cycleData, { merge: true });
+    try {
+      localStorage.setItem(CYCLE_STORAGE_KEY, JSON.stringify(cycleData));
+    } catch (_) {}
+  } catch (err) {
+    console.warn('Error saving dispatch_cycle to Firestore, cached in localStorage:', err);
+    try {
+      localStorage.setItem(CYCLE_STORAGE_KEY, JSON.stringify(cycleData));
+    } catch (_) {}
+  }
+
+  return cycleData;
+}
+
+export async function checkAndApplyAutomaticMonthlyReset(): Promise<MonthlyDispatchCycle> {
+  const defaultCycle = getDefaultMonthlyCycle();
+  try {
+    const cycleDocRef = doc(db, 'system_metadata', 'dispatch_cycle');
+    const snap = await getDoc(cycleDocRef);
+    if (!snap.exists()) {
+      await setDoc(cycleDocRef, defaultCycle, { merge: true });
+      try {
+        localStorage.setItem(CYCLE_STORAGE_KEY, JSON.stringify(defaultCycle));
+      } catch (_) {}
+      return defaultCycle;
+    }
+
+    const currentData = snap.data() as MonthlyDispatchCycle;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthIndex = now.getMonth();
+    const currentMonthPrefix = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, '0')}`;
+    const firstOfMonth = new Date(currentYear, currentMonthIndex, 1, 0, 0, 0, 0);
+
+    if (
+      !currentData.cycleMonth ||
+      currentData.cycleMonth !== currentMonthPrefix ||
+      new Date(currentData.lastResetAt).getTime() < firstOfMonth.getTime()
+    ) {
+      const updatedCycle: MonthlyDispatchCycle = {
+        lastResetAt: firstOfMonth.toISOString(),
+        resetBy: 'Automated System (1st 12:00 AM)',
+        resetReason: 'Automatic Monthly 1st 12:00 AM cycle reset',
+        cycleMonth: currentMonthPrefix,
+        archivedCount: 0
+      };
+      await setDoc(cycleDocRef, updatedCycle, { merge: true });
+      try {
+        localStorage.setItem(CYCLE_STORAGE_KEY, JSON.stringify(updatedCycle));
+      } catch (_) {}
+      return updatedCycle;
+    }
+    return currentData;
+  } catch (e) {
+    return defaultCycle;
   }
 }
 

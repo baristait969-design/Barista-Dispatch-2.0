@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { DispatchLog } from '../types';
+import { getDispatchReportNo, getDispatchDocumentName } from './dispatchNumberUtils';
 
 export interface PdfHeaderConfig {
   title: string;
@@ -13,6 +14,7 @@ export interface PdfHeaderConfig {
   refId: string;
   haccpLink?: string;
   mandateNotice?: string;
+  showMandateNotice?: boolean;
 }
 
 /**
@@ -26,8 +28,9 @@ export function drawHaccpHeaderToPdf(
   config: PdfHeaderConfig,
   isLandscape: boolean = false
 ): number {
+  const hasMandate = Boolean(config.showMandateNotice && config.mandateNotice);
   const gridHeight = isLandscape ? 25 : 28;
-  const bannerHeight = isLandscape ? 5.5 : 6;
+  const bannerHeight = hasMandate ? (isLandscape ? 5.5 : 6) : 0;
   const totalHeaderHeight = gridHeight + bannerHeight;
 
   // 1. Draw outer frame
@@ -162,22 +165,24 @@ export function drawHaccpHeaderToPdf(
   doc.text(config.approvedBy, leftHalfX, band3Y + (isLandscape ? 6.5 : 7.2), { align: 'center' });
   doc.text(config.refId, rightHalfX, band3Y + (isLandscape ? 6.5 : 7.2), { align: 'center' });
 
-  // Banner strip
-  const bannerY = startY + gridHeight;
-  doc.setFillColor(245, 245, 248);
-  doc.rect(startX, bannerY, totalWidth, bannerHeight, 'F');
-  doc.setDrawColor(25, 20, 18);
-  doc.setLineWidth(0.4);
-  doc.line(startX, bannerY, startX + totalWidth, bannerY);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(isLandscape ? 6.0 : 6.5);
-  doc.setTextColor(40, 40, 40);
-  doc.text(
-    config.mandateNotice || 'CRITICAL CONTROL REQUIREMENT: Maximum dispatch transit temperature must remain <= 5.0 C (OPRP-2)',
-    startX + totalWidth / 2,
-    bannerY + bannerHeight / 2 + (isLandscape ? 1.0 : 1.2),
-    { align: 'center' }
-  );
+  // Banner strip (only if showMandateNotice is explicitly enabled)
+  if (hasMandate && config.mandateNotice) {
+    const bannerY = startY + gridHeight;
+    doc.setFillColor(245, 245, 248);
+    doc.rect(startX, bannerY, totalWidth, bannerHeight, 'F');
+    doc.setDrawColor(25, 20, 18);
+    doc.setLineWidth(0.4);
+    doc.line(startX, bannerY, startX + totalWidth, bannerY);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(isLandscape ? 6.0 : 6.5);
+    doc.setTextColor(40, 40, 40);
+    doc.text(
+      config.mandateNotice,
+      startX + totalWidth / 2,
+      bannerY + bannerHeight / 2 + (isLandscape ? 1.0 : 1.2),
+      { align: 'center' }
+    );
+  }
 
   return startY + totalHeaderHeight + 3.5;
 }
@@ -220,8 +225,7 @@ export function buildExecutiveReportDoc(
       version: '01',
       approvedBy: userName,
       refId: `AUD-${stats.totalDispatches}-REC`,
-      haccpLink: 'OPRP-2 Certified (<= 5.0 C)',
-      mandateNotice: 'CRITICAL CONTROL REQUIREMENT: Maximum dispatch transit temperature must remain <= 5.0 C'
+      haccpLink: 'OPRP-2 Certified (<= 5.0 C)'
     },
     true
   );
@@ -459,6 +463,11 @@ export function buildSingleDispatchDoc(log: Partial<DispatchLog> & {
   const startY = 10;
   const totalWidth = 178;
 
+  const reportNo = log.reportNo || getDispatchReportNo(log);
+  const documentName = log.documentName || getDispatchDocumentName(log);
+  const revision = log.revision || 'Rev 01';
+  const version = log.version || '01';
+
   const nextY = drawHaccpHeaderToPdf(
     doc,
     startX,
@@ -469,12 +478,11 @@ export function buildSingleDispatchDoc(log: Partial<DispatchLog> & {
       subtitle: 'Central Kitchen Cold-Chain Logistics & Dispatch Custody',
       docCode: 'BCL/REC/HACCP/32',
       effectiveDate: log.date || '01 January 2025',
-      revision: 'Rev 01',
-      version: '01',
+      revision: revision,
+      version: version,
       approvedBy: log.supervisor || 'QA Executive',
-      refId: log.docNo || log.id || 'DSP-001',
-      haccpLink: 'OPRP-2 (Cold-Chain <= 5.0 C)',
-      mandateNotice: 'CRITICAL CONTROL REQUIREMENT: Maximum dispatch transit temperature must remain <= 5.0 C'
+      refId: documentName,
+      haccpLink: 'OPRP-2 (Cold-Chain <= 5.0 C)'
     },
     false
   );
@@ -629,7 +637,7 @@ export function buildSingleDispatchDoc(log: Partial<DispatchLog> & {
 
   doc.setFontSize(6.5);
   doc.setTextColor(130, 130, 130);
-  doc.text(`Barista Coffee Lanka - BCL/REC/HACCP/32 - Doc ID: ${log.docNo || log.id || 'DSP-001'}`, startX, 287);
+  doc.text(`Barista Coffee Lanka - BCL/REC/HACCP/32 - Doc Ref: ${documentName} (${revision} / ${version}) - Report #: ${reportNo}`, startX, 287);
   doc.text(`Printed: ${new Date().toLocaleString()}`, startX + totalWidth - 45, 287);
 
   return doc;
@@ -647,8 +655,10 @@ export function getDispatchFilename(log: any): string {
     outlet = 'Outlet';
   }
   const cleanOutlet = outlet.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-  const todayStr = new Date().toISOString().split('T')[0];
-  return `Barista_Dispatch_${cleanOutlet}_${todayStr}.pdf`;
+  const docName = log?.documentName || log?.reportNo || 'DSP';
+  const cleanDocName = docName.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const todayStr = (log?.date || new Date().toISOString().split('T')[0]);
+  return `Barista_Dispatch_${cleanDocName}_${cleanOutlet}_${todayStr}.pdf`;
 }
 
 export function generateSingleDispatchPDF(log: any) {

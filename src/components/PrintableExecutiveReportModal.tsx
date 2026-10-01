@@ -104,7 +104,6 @@ export const PrintableExecutiveReportModal: React.FC<PrintableExecutiveReportMod
             approvedBy={generatedBy || 'QA Executive'}
             refId={`AUD-${stats.totalDispatches}-REC`}
             haccpLink="OPRP-2 Certified (<= 5.0 C)"
-            mandateNotice="CRITICAL CONTROL REQUIREMENT: Maximum dispatch transit temperature must remain <= 5.0 C"
             className="mb-4 print:mb-3"
             variant="paper"
           />
