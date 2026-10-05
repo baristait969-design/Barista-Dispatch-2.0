@@ -225,10 +225,20 @@ input[type="number"] {
     page-break-inside: avoid !important;
   }
 
-  /* High fidelity print color retention */
+  /* High fidelity print color retention and solid borders */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     color-adjust: exact !important;
+  }
+
+  #print-root table.haccp-table,
+  #print-root table {
+    border: 2px solid #1c1917 !important;
+    border-collapse: collapse !important;
+  }
+  #print-root table.haccp-table th,
+  #print-root table.haccp-table td {
+    border-color: #1c1917 !important;
   }
 }

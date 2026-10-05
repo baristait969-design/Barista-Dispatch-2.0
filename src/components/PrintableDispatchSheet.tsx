@@ -4,7 +4,7 @@ import { DispatchLog, DispatchLineItem } from '../types';
 import { BaristaLogo } from './BaristaLogo';
 import { DocumentHaccpHeader } from './DocumentHaccpHeader';
 import { generateSingleDispatchPDF } from '../utils/pdfExport';
-import { printHtmlElement, syncToPrintRoot, clearPrintRoot } from '../utils/printUtils';
+import { printHtmlElement, syncToPrintRoot, clearPrintRoot, downloadHtmlElementAsPDF } from '../utils/printUtils';
 import { getDispatchReportNo, getDispatchDocumentName } from '../utils/dispatchNumberUtils';
 
 interface PrintableDispatchSheetProps {
@@ -50,6 +50,10 @@ export const PrintableDispatchSheet: React.FC<PrintableDispatchSheetProps> = ({
 
   const handlePrint = () => {
     printHtmlElement('printable-dispatch-sheet-content', getDocFilenameTitle());
+  };
+
+  const handleDownloadPDF = () => {
+    generateSingleDispatchPDF(dispatchLog as any);
   };
 
   React.useEffect(() => {
@@ -99,7 +103,7 @@ export const PrintableDispatchSheet: React.FC<PrintableDispatchSheetProps> = ({
 
           <div className="flex items-center space-x-2">
             <button
-              onClick={() => generateSingleDispatchPDF(dispatchLog as any)}
+              onClick={handleDownloadPDF}
               className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs flex items-center space-x-1.5 shadow-md transition cursor-pointer"
               title="Download official PDF copy"
             >
@@ -188,72 +192,99 @@ export const PrintableDispatchSheet: React.FC<PrintableDispatchSheetProps> = ({
 
           {/* Selected Dispatches Table */}
           <div className="mb-4 print:mb-3.5">
-            <div className="flex items-center justify-between mb-1.5 print:mb-1">
+            <div className="mb-1.5 print:mb-1">
               <span className="text-xs font-black uppercase tracking-wider text-stone-800">
                 Dispatched Kitchen Line Items ({activeItems.length} Products)
-              </span>
-              <span className="text-[10px] text-stone-500 font-mono">
-                Printed only items with quantity &gt; 0
               </span>
             </div>
 
             {activeItems.length === 0 ? (
-              <div className="border border-stone-300 p-8 text-center text-xs text-stone-500 italic">
+              <div className="border-2 border-stone-900 p-8 text-center text-xs text-stone-500 italic">
                 No products with quantity &gt; 0 selected for dispatch.
               </div>
             ) : (
-              <table className="w-full text-left text-xs border-collapse border border-stone-900 rounded-lg overflow-hidden">
+              <table
+                className="w-full text-left text-xs border-collapse haccp-table"
+                style={{ border: '2px solid #1c1917' }}
+              >
                 <thead>
-                  <tr className="bg-stone-100 text-stone-900 border-b-2 border-stone-900 font-bold uppercase text-[10px] tracking-wider">
-                    <th className="p-2 border-r border-stone-400 w-8 text-center">#</th>
-                    <th className="p-2 border-r border-stone-400 w-[35%] min-w-[190px]">Product Description</th>
-                    <th className="p-2 border-r border-stone-400 w-24 min-w-[90px] text-center">Batch No</th>
-                    <th className="p-2 border-r border-stone-400 w-18 text-center">Dispatch Time</th>
-                    <th className="p-2 border-r border-stone-400 w-22 text-center">Prod Date</th>
-                    <th className="p-2 border-r border-stone-400 w-22 text-center">Expiration Date</th>
-                    <th className="p-2 border-r border-stone-400 w-16 text-center">Qty (Units)</th>
-                    <th className="p-2 w-20 text-center">Dispatch Temp</th>
+                  <tr className="bg-stone-100 text-stone-900 font-bold uppercase text-[10px] tracking-wider" style={{ borderBottom: '2px solid #1c1917' }}>
+                    <th className="p-2 w-8 text-center" style={{ borderRight: '2px solid #1c1917', borderBottom: '2px solid #1c1917' }}>#</th>
+                    <th className="p-2 w-[35%] min-w-[190px]" style={{ borderRight: '2px solid #1c1917', borderBottom: '2px solid #1c1917' }}>Product Description</th>
+                    <th className="p-2 w-24 min-w-[90px] text-center" style={{ borderRight: '2px solid #1c1917', borderBottom: '2px solid #1c1917' }}>Batch No</th>
+                    <th className="p-2 w-18 text-center" style={{ borderRight: '2px solid #1c1917', borderBottom: '2px solid #1c1917' }}>Dispatch Time</th>
+                    <th className="p-2 w-22 text-center" style={{ borderRight: '2px solid #1c1917', borderBottom: '2px solid #1c1917' }}>Prod Date</th>
+                    <th className="p-2 w-22 text-center" style={{ borderRight: '2px solid #1c1917', borderBottom: '2px solid #1c1917' }}>Expiration Date</th>
+                    <th className="p-2 w-16 text-center" style={{ borderRight: '2px solid #1c1917', borderBottom: '2px solid #1c1917' }}>Qty (Units)</th>
+                    <th className="p-2 w-20 text-center" style={{ borderBottom: '2px solid #1c1917' }}>Dispatch Temp</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-stone-300">
+                <tbody>
                   {activeItems.map((item, index) => (
-                    <tr key={item.id || index} className="text-stone-900">
-                      <td className="p-2 border-r border-stone-300 text-center font-mono font-bold text-stone-500">
+                    <tr key={item.id || index} className="text-stone-900" style={{ borderBottom: '2px solid #1c1917' }}>
+                      <td className="p-2 text-center font-mono font-bold text-stone-500" style={{ borderRight: '2px solid #1c1917', borderBottom: '2px solid #1c1917' }}>
                         {index + 1}
                       </td>
-                      <td className="p-2 border-r border-stone-300 font-bold">
+                      <td className="p-2 font-bold" style={{ borderRight: '2px solid #1c1917', borderBottom: '2px solid #1c1917' }}>
                         {item.productName}
                       </td>
-                      <td className="p-2 border-r border-stone-300 font-mono font-semibold text-stone-800 text-center whitespace-nowrap">
+                      <td className="p-2 font-mono font-semibold text-stone-800 text-center whitespace-nowrap" style={{ borderRight: '2px solid #1c1917', borderBottom: '2px solid #1c1917' }}>
                         {item.batchNo || 'N/A'}
                       </td>
-                      <td className="p-2 border-r border-stone-300 text-center font-mono whitespace-nowrap">
+                      <td className="p-2 text-center font-mono whitespace-nowrap" style={{ borderRight: '2px solid #1c1917', borderBottom: '2px solid #1c1917' }}>
                         {item.dispatchTime || dispatchLog.dispatchTime}
                       </td>
-                      <td className="p-2 border-r border-stone-300 font-mono text-stone-700 text-center whitespace-nowrap">
+                      <td className="p-2 font-mono text-stone-700 text-center whitespace-nowrap" style={{ borderRight: '2px solid #1c1917', borderBottom: '2px solid #1c1917' }}>
                         {item.prodDate || '-'}
                       </td>
-                      <td className="p-2 border-r border-stone-300 font-mono text-stone-700 text-center whitespace-nowrap">
+                      <td className="p-2 font-mono text-stone-700 text-center whitespace-nowrap" style={{ borderRight: '2px solid #1c1917', borderBottom: '2px solid #1c1917' }}>
                         {item.useByDate || '-'}
                       </td>
-                      <td className="p-2 border-r border-stone-300 text-center font-mono font-bold text-sm bg-stone-50/70 whitespace-nowrap">
+                      <td className="p-2 text-center font-mono font-bold text-sm bg-stone-50/70 whitespace-nowrap" style={{ borderRight: '2px solid #1c1917', borderBottom: '2px solid #1c1917' }}>
                         {item.quantity}
                       </td>
-                      <td className="p-2 text-center font-mono font-bold text-stone-900 whitespace-nowrap">
+                      <td className="p-2 text-center font-mono font-bold text-stone-900 whitespace-nowrap" style={{ borderBottom: '2px solid #1c1917' }}>
                         {item.dispatchTemp.toFixed(1)} C
                       </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-stone-900 bg-stone-100 font-bold text-xs text-stone-900">
-                    <td colSpan={6} className="p-2 text-right uppercase tracking-wider">
-                      Total Dispatched Output:
+                  <tr className="bg-white font-bold text-xs text-stone-900" style={{ borderTop: '2px solid #1c1917', borderBottom: '2px solid #1c1917' }}>
+                    <td
+                      colSpan={6}
+                      className="p-2.5 text-center uppercase tracking-wider font-black text-xs"
+                      style={{
+                        borderRight: '2px solid #1c1917',
+                        borderBottom: '2px solid #1c1917',
+                        backgroundColor: '#ffffff',
+                        textAlign: 'center',
+                        verticalAlign: 'middle'
+                      }}
+                    >
+                      TOTAL DISPATCHED OUTPUT:
                     </td>
-                    <td className="p-2 border-r border-l border-stone-900 text-center font-mono text-sm bg-stone-200 font-black">
-                      {totalUnits} Units
+                    <td
+                      className="p-2 text-center font-mono text-sm font-black"
+                      style={{
+                        borderRight: '2px solid #1c1917',
+                        borderBottom: '2px solid #1c1917',
+                        backgroundColor: '#e7e5e4',
+                        textAlign: 'center',
+                        verticalAlign: 'middle'
+                      }}
+                    >
+                      {totalUnits}<br/><span className="text-[10px] font-bold">Units</span>
                     </td>
-                    <td className="p-2 text-center font-mono text-xs">
+                    <td
+                      className="p-2 text-center font-mono text-xs font-bold"
+                      style={{
+                        borderBottom: '2px solid #1c1917',
+                        backgroundColor: '#ffffff',
+                        textAlign: 'center',
+                        verticalAlign: 'middle'
+                      }}
+                    >
                       {activeItems.length > 0 ? (activeItems.reduce((s, i) => s + i.dispatchTemp, 0) / activeItems.length).toFixed(1) : '-'} C avg
                     </td>
                   </tr>

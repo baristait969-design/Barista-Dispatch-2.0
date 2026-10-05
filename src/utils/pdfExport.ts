@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { DispatchLog } from '../types';
 import { getDispatchReportNo, getDispatchDocumentName } from './dispatchNumberUtils';
+import { downloadHtmlElementAsPDF, renderDispatchSheetHtml } from './printUtils';
 
 export interface PdfHeaderConfig {
   title: string;
@@ -413,15 +414,29 @@ export function buildExecutiveReportDoc(
   return doc;
 }
 
-export function generateExecutiveReportPDF(
+export async function generateExecutiveReportPDF(
   logs: DispatchLog[],
   stats: any,
   userName: string = 'QA Executive',
   dateRange: string = 'All Records'
 ) {
-  const doc = buildExecutiveReportDoc(logs, stats, userName, dateRange);
   const todayStr = new Date().toISOString().split('T')[0];
-  doc.save(`Barista_Executive_Dispatch_Report_${todayStr}.pdf`);
+  const filename = `Barista_Executive_Dispatch_Report_${todayStr}.pdf`;
+
+  // 1. If currently rendered on screen, capture directly to ensure exact match with printed version:
+  const screenContent = typeof document !== 'undefined' ? document.getElementById('printable-executive-report-content') : null;
+  if (screenContent) {
+    try {
+      await downloadHtmlElementAsPDF(screenContent, filename, 'landscape');
+      return;
+    } catch (e) {
+      console.warn('Failed capturing screen executive report, using fallback:', e);
+    }
+  }
+
+  // 2. Fallback to jsPDF
+  const doc = buildExecutiveReportDoc(logs, stats, userName, dateRange);
+  doc.save(filename);
 }
 
 export function printExecutiveReportPDF(
@@ -448,6 +463,8 @@ export function buildSingleDispatchDoc(log: Partial<DispatchLog> & {
   dispatchTime: string;
   driverName: string;
   supervisor: string;
+  supervisorId?: string;
+  vehicleNo?: string;
 }): jsPDF {
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -455,190 +472,440 @@ export function buildSingleDispatchDoc(log: Partial<DispatchLog> & {
     format: 'a4'
   });
 
-  const activeItems = log.items.filter(item => item.quantity > 0);
-  const totalUnits = activeItems.reduce((acc, item) => acc + item.quantity, 0);
-  const isAllHaccpCompliant = activeItems.every(item => item.dispatchTemp <= 5.0);
+  const activeItems = (log.items || []).filter(item => (item.quantity || 0) > 0);
+  const totalUnits = activeItems.reduce((acc, item) => acc + (item.quantity || 0), 0);
+  const avgTemp = activeItems.length > 0
+    ? (activeItems.reduce((acc, item) => acc + (Number(item.dispatchTemp) || 0), 0) / activeItems.length).toFixed(1)
+    : '4.0';
 
-  const startX = 20;
+  const startX = 12;
   const startY = 10;
-  const totalWidth = 178;
+  const totalWidth = 186;
 
-  const reportNo = log.reportNo || getDispatchReportNo(log);
-  const documentName = log.documentName || getDispatchDocumentName(log);
+  const documentName = log.documentName || log.reportNo || getDispatchDocumentName(log);
   const revision = log.revision || 'Rev 01';
   const version = log.version || '01';
+  const dateStr = log.date || new Date().toISOString().split('T')[0];
+  const timeStr = log.dispatchTime || '15:13';
+  const driverStr = log.driverName || 'Kamal Perera';
+  const supervisorStr = log.supervisor || 'Barista IT Administrator';
+  const supervisorId = log.supervisorId || 'admin-barista-00';
+  const vehicleStr = log.vehicleNo || 'Refrigerated Van';
+  const outletStr = (log.outletNames && log.outletNames.length > 0)
+    ? log.outletNames.join(', ')
+    : ((log as any).outletName || 'All Assigned Outlets');
 
-  const nextY = drawHaccpHeaderToPdf(
-    doc,
-    startX,
-    startY,
-    totalWidth,
-    {
-      title: 'Dispatch Log & Receipt',
-      subtitle: 'Central Kitchen Cold-Chain Logistics & Dispatch Custody',
-      docCode: 'BCL/REC/HACCP/32',
-      effectiveDate: log.date || '01 January 2025',
-      revision: revision,
-      version: version,
-      approvedBy: log.supervisor || 'QA Executive',
-      refId: documentName,
-      haccpLink: 'OPRP-2 (Cold-Chain <= 5.0 C)'
-    },
-    false
-  );
+  // ==========================================
+  // SECTION 1: OFFICIAL HACCP CONTROL HEADER
+  // ==========================================
+  const headerHeight = 32;
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(28, 25, 23);
+  doc.setLineWidth(0.45);
+  doc.roundedRect(startX, startY, totalWidth, headerHeight, 2.5, 2.5, 'S');
 
-  const logBoxY = nextY;
-  const logBoxH = 18;
-  doc.setFillColor(248, 248, 250);
-  doc.rect(startX, logBoxY, totalWidth, logBoxH, 'F');
-  doc.setDrawColor(200, 200, 205);
-  doc.setLineWidth(0.3);
-  doc.rect(startX, logBoxY, totalWidth, logBoxH, 'S');
+  // Vertical dividers between 3 header columns
+  const col1W = 55;
+  const col2W = 76;
+  doc.line(startX + col1W, startY, startX + col1W, startY + headerHeight);
+  doc.line(startX + col1W + col2W, startY, startX + col1W + col2W, startY + headerHeight);
 
-  doc.setFontSize(7.5);
-  doc.setTextColor(100, 100, 100);
+  // Column 1: Logo & Central Kitchen Brand
+  const col1CenterX = startX + col1W / 2;
+  doc.setFillColor(239, 99, 64);
+  doc.circle(col1CenterX, startY + 7.2, 4.8, 'F');
+
   doc.setFont('helvetica', 'bold');
-  doc.text('DESTINATION OUTLETS', startX + 4, logBoxY + 4.5);
-  doc.text('DATE & DISPATCH TIME', startX + 70, logBoxY + 4.5);
-  doc.text('ASSIGNED DRIVER', startX + 130, logBoxY + 4.5);
+  doc.setFontSize(5.5);
+  doc.setTextColor(255, 255, 255);
+  doc.text('BARISTA', col1CenterX, startY + 8.1, { align: 'center' });
 
-  doc.setFontSize(9);
-  doc.setTextColor(20, 20, 20);
-  doc.text(log.outletNames.join(', ') || 'Retail Branches', startX + 4, logBoxY + 10);
-  doc.text(`${log.date} @ ${log.dispatchTime}`, startX + 70, logBoxY + 10);
-  doc.text(log.driverName || 'Fleet Driver', startX + 130, logBoxY + 10);
+  doc.setFillColor(100, 27, 11);
+  doc.rect(col1CenterX - 1.25, startY + 8.7, 2.5, 0.4, 'F');
 
-  doc.setFontSize(7.5);
-  doc.setTextColor(80, 80, 80);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.setTextColor(28, 25, 23);
+  doc.text('BARISTA', col1CenterX, startY + 16.5, { align: 'center' });
+
+  doc.setFontSize(5.5);
+  doc.setTextColor(68, 64, 60);
+  doc.text('SRI LANKA - CENTRAL KITCHEN', col1CenterX, startY + 20.5, { align: 'center' });
+
   doc.setFont('helvetica', 'normal');
-  doc.text(`QA Supervisor: ${log.supervisor || 'QA Officer'}${log.notes ? ` - Notes: ${log.notes}` : ''}`, startX + 4, logBoxY + 15);
+  doc.setFontSize(4.8);
+  doc.setTextColor(120, 113, 108);
+  doc.text('Barista Coffee Lanka (Pvt) Ltd.', col1CenterX, startY + 24, { align: 'center' });
 
-  const tableRows = activeItems.map((item, idx) => {
-    const isCompliant = item.dispatchTemp <= 5.0;
-    return [
-      idx + 1,
-      item.productName,
-      item.batchNo || 'N/A',
-      item.dispatchTime || log.dispatchTime,
-      item.prodDate || '-',
-      item.useByDate || '-',
-      item.quantity,
-      `${item.dispatchTemp.toFixed(1)} C`,
-      isCompliant ? 'PASS (<=5 C)' : 'FAIL (>5 C)'
-    ];
-  });
+  // Column 2: Document Title & HACCP Certification
+  const col2CenterX = startX + col1W + col2W / 2;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(5.5);
+  doc.setTextColor(110, 105, 100);
+  doc.text('HACCP FOOD SAFETY MANAGEMENT SYSTEM', col2CenterX, startY + 5.5, { align: 'center' });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(28, 25, 23);
+  doc.text('DISPATCH LOG &', col2CenterX, startY + 10, { align: 'center' });
+  doc.text('RECEIPT', col2CenterX, startY + 14.5, { align: 'center' });
+
+  // Pill badge
+  doc.setFillColor(254, 242, 242);
+  doc.setDrawColor(237, 83, 56);
+  doc.setLineWidth(0.2);
+  doc.roundedRect(col2CenterX - 24, startY + 16.5, 48, 4.5, 1, 1, 'FD');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.2);
+  doc.setTextColor(216, 66, 40);
+  doc.text('OPRP-2 (Cold-Chain <= 5.0 C)', col2CenterX, startY + 19.8, { align: 'center' });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(28, 25, 23);
+  doc.text(`Doc Ref: ${documentName}`, col2CenterX, startY + 24.5, { align: 'center' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(5.0);
+  doc.setTextColor(120, 113, 108);
+  doc.text('Central Kitchen Cold-Chain Logistics & Dispatch Custody', col2CenterX, startY + 28, { align: 'center' });
+
+  // Column 3: Document Control Metadata
+  const col3StartX = startX + col1W + col2W;
+  const col3EndX = startX + totalWidth;
+  const col3CenterX = (col3StartX + col3EndX) / 2;
+  const row1H = 10.5;
+  const row2H = 10.5;
+
+  // Row 1: Record Code
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(5.2);
+  doc.setTextColor(110, 100, 95);
+  doc.text('RECORD CODE', col3CenterX, startY + 4.2, { align: 'center' });
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(28, 25, 23);
+  doc.text('BCL/REC/HACCP/32', col3CenterX, startY + 8.5, { align: 'center' });
+
+  doc.setDrawColor(214, 211, 209);
+  doc.setLineWidth(0.2);
+  doc.line(col3StartX, startY + row1H, col3EndX, startY + row1H);
+
+  // Row 2: Effective Date | Revision/Ver
+  const leftSubCenterX = col3StartX + (col3EndX - col3StartX) / 4;
+  const rightSubCenterX = col3StartX + ((col3EndX - col3StartX) * 3) / 4;
+  doc.line(col3CenterX, startY + row1H, col3CenterX, startY + row1H + row2H);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(4.8);
+  doc.setTextColor(110, 100, 95);
+  doc.text('EFFECTIVE DATE', leftSubCenterX, startY + 14.5, { align: 'center' });
+  doc.text('REVISION / VER', rightSubCenterX, startY + 14.5, { align: 'center' });
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(28, 25, 23);
+  doc.text(dateStr, leftSubCenterX, startY + 18.5, { align: 'center' });
+  doc.text(`${revision} / ${version}`, rightSubCenterX, startY + 18.5, { align: 'center' });
+
+  doc.line(col3StartX, startY + row1H + row2H, col3EndX, startY + row1H + row2H);
+
+  // Row 3: Approved By | Document Ref
+  doc.line(col3CenterX, startY + row1H + row2H, col3CenterX, startY + headerHeight);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(4.8);
+  doc.setTextColor(110, 100, 95);
+  doc.text('APPROVED BY', leftSubCenterX, startY + 24.5, { align: 'center' });
+  doc.text('DOCUMENT REF', rightSubCenterX, startY + 24.5, { align: 'center' });
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.2);
+  doc.setTextColor(28, 25, 23);
+  const displayApproved = supervisorStr.length > 20 ? supervisorStr.substring(0, 18) + '...' : supervisorStr;
+  doc.text(displayApproved, leftSubCenterX, startY + 28.5, { align: 'center' });
+  doc.text(documentName, rightSubCenterX, startY + 28.5, { align: 'center' });
+
+  // ==========================================
+  // SECTION 2: LOGISTICS MANIFEST DETAILS
+  // ==========================================
+  const logBoxY = startY + headerHeight + 4;
+  const logBoxH = 17;
+  doc.setFillColor(250, 250, 250);
+  doc.setDrawColor(214, 211, 209);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(startX, logBoxY, totalWidth, logBoxH, 2, 2, 'FD');
+
+  // Row 1: 3 Logistics Labels and Values
+  doc.setFontSize(5.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(120, 113, 108);
+  doc.text('DESTINATION OUTLETS', startX + 4, logBoxY + 4);
+  doc.text('DATE & DISPATCH TIME', startX + 70, logBoxY + 4);
+  doc.text('ASSIGNED DISPATCH DRIVER', startX + 135, logBoxY + 4);
+
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(28, 25, 23);
+  doc.text(outletStr, startX + 4, logBoxY + 8);
+  doc.text(`${dateStr} @ ${timeStr} hrs`, startX + 70, logBoxY + 8);
+  doc.text(driverStr, startX + 135, logBoxY + 8);
+
+  // Horizontal divider
+  doc.setDrawColor(231, 229, 228);
+  doc.setLineWidth(0.2);
+  doc.line(startX + 4, logBoxY + 10.5, startX + totalWidth - 4, logBoxY + 10.5);
+
+  // Row 2: QA Supervisor Info
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(120, 113, 108);
+  doc.text('Dispatch QA / Supervisor: ', startX + 4, logBoxY + 14.5);
+  const supPrefixW = doc.getTextWidth('Dispatch QA / Supervisor: ');
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(28, 25, 23);
+  doc.text(supervisorStr, startX + 4 + supPrefixW, logBoxY + 14.5);
+  const supNameW = doc.getTextWidth(supervisorStr);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(120, 113, 108);
+  doc.text(` (${supervisorId})`, startX + 4 + supPrefixW + supNameW, logBoxY + 14.5);
+
+  // ==========================================
+  // SECTION 3: KITCHEN LINE ITEMS TABLE
+  // ==========================================
+  const titleY = logBoxY + logBoxH + 5;
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(28, 25, 23);
+  doc.text(`DISPATCHED KITCHEN LINE ITEMS (${activeItems.length} PRODUCTS)`, startX, titleY);
+
+  const tableRows = activeItems.map((item, idx) => [
+    idx + 1,
+    item.productName,
+    item.batchNo || 'N/A',
+    item.dispatchTime || timeStr,
+    item.prodDate || '-',
+    item.useByDate || '-',
+    item.quantity,
+    `${Number(item.dispatchTemp).toFixed(1)} C`
+  ]);
 
   autoTable(doc, {
-    startY: logBoxY + logBoxH + 4,
-    head: [['#', 'Product Description', 'Batch No', 'Time', 'Prod Date', 'Expiration Date', 'Qty', 'Temp', 'HACCP Check']],
+    startY: titleY + 2,
+    margin: { left: startX, right: 12 },
+    tableWidth: totalWidth,
+    tableLineWidth: 0.45,
+    tableLineColor: [28, 25, 23],
+    head: [['#', 'PRODUCT DESCRIPTION', 'BATCH NO', 'DISPATCH TIME', 'PROD DATE', 'EXPIRATION DATE', 'QTY (UNITS)', 'DISPATCH TEMP']],
     body: tableRows,
+    foot: [
+      [
+        {
+          content: 'TOTAL DISPATCHED OUTPUT:',
+          colSpan: 6,
+          styles: {
+            halign: 'center',
+            valign: 'middle',
+            fontStyle: 'bold',
+            fontSize: 7.5,
+            textColor: [28, 25, 23],
+            fillColor: [255, 255, 255],
+            lineWidth: 0.45,
+            lineColor: [28, 25, 23]
+          }
+        },
+        {
+          content: `${totalUnits}\nUnits`,
+          styles: {
+            halign: 'center',
+            valign: 'middle',
+            fontStyle: 'bold',
+            fontSize: 8.0,
+            textColor: [28, 25, 23],
+            fillColor: [231, 229, 228],
+            lineWidth: 0.45,
+            lineColor: [28, 25, 23]
+          }
+        },
+        {
+          content: `${avgTemp} C avg`,
+          styles: {
+            halign: 'center',
+            valign: 'middle',
+            fontStyle: 'bold',
+            fontSize: 7.2,
+            textColor: [28, 25, 23],
+            fillColor: [255, 255, 255],
+            lineWidth: 0.45,
+            lineColor: [28, 25, 23]
+          }
+        }
+      ]
+    ],
     theme: 'grid',
     headStyles: {
-      fillColor: [35, 32, 29],
-      textColor: [255, 255, 255],
-      fontSize: 8,
-      fontStyle: 'bold'
+      fillColor: [245, 245, 244],
+      textColor: [28, 25, 23],
+      fontSize: 6.5,
+      fontStyle: 'bold',
+      halign: 'center',
+      valign: 'middle',
+      lineWidth: 0.45,
+      lineColor: [28, 25, 23]
     },
     bodyStyles: {
-      fontSize: 8,
-      textColor: [30, 30, 30]
+      fontSize: 7.2,
+      textColor: [28, 25, 23],
+      lineColor: [28, 25, 23],
+      lineWidth: 0.45,
+      valign: 'middle'
     },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 10 },
-      1: { fontStyle: 'bold', cellWidth: 58 },
-      2: { halign: 'center', cellWidth: 16 },
-      3: { halign: 'center', cellWidth: 18 },
-      4: { halign: 'center', cellWidth: 19 },
-      5: { halign: 'center', cellWidth: 19 },
-      6: { halign: 'center', fontStyle: 'bold', cellWidth: 14 },
-      7: { halign: 'center', fontStyle: 'bold', cellWidth: 12 },
-      8: { halign: 'center', fontStyle: 'bold', cellWidth: 12 }
+      0: { halign: 'center', cellWidth: 9, fontStyle: 'bold', textColor: [120, 113, 108] },
+      1: { halign: 'left', cellWidth: 61, fontStyle: 'bold', textColor: [28, 25, 23] },
+      2: { halign: 'center', cellWidth: 22, fontStyle: 'bold', textColor: [41, 37, 36] },
+      3: { halign: 'center', cellWidth: 20 },
+      4: { halign: 'center', cellWidth: 20, textColor: [68, 64, 60] },
+      5: { halign: 'center', cellWidth: 20, textColor: [68, 64, 60] },
+      6: { halign: 'center', cellWidth: 17, fontStyle: 'bold', fontSize: 8.5, textColor: [28, 25, 23] },
+      7: { halign: 'center', cellWidth: 17, fontStyle: 'bold', textColor: [28, 25, 23] }
+    },
+    footStyles: {
+      valign: 'middle'
     },
     didParseCell: function(data) {
-      if (data.section === 'body' && data.column.index === 8) {
-        if (String(data.cell.raw).startsWith('PASS')) {
-          data.cell.styles.textColor = [16, 120, 50];
-        } else {
-          data.cell.styles.textColor = [180, 20, 20];
-        }
+      if (data.section === 'head' && data.column.index === 1) {
+        data.cell.styles.halign = 'left';
+      }
+      if (data.section === 'body') {
+        data.cell.styles.lineColor = [28, 25, 23];
+        data.cell.styles.lineWidth = 0.45;
+      }
+      if (data.section === 'foot') {
+        data.cell.styles.lineColor = [28, 25, 23];
+        data.cell.styles.lineWidth = 0.45;
+        data.cell.styles.valign = 'middle';
       }
     }
   });
 
-  const finalY = (doc as any).lastAutoTable.finalY + 5;
-  doc.setFillColor(240, 240, 245);
-  doc.rect(startX, finalY, totalWidth, 9, 'F');
-  doc.setDrawColor(200, 200, 205);
-  doc.setLineWidth(0.3);
-  doc.rect(startX, finalY, totalWidth, 9, 'S');
+  // ==========================================
+  // SECTION 4: 3-PARTY CUSTODY SIGN-OFF MATRIX
+  // ==========================================
+  const lastTableFinalY = (doc as any).lastAutoTable?.finalY || 160;
+  const signStartY = lastTableFinalY + 6;
+  const signHeight = 32;
 
-  doc.setFontSize(8.5);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(20, 20, 20);
-  doc.text(`TOTAL DISPATCHED OUTPUT: ${totalUnits} UNITS`, startX + 4, finalY + 6);
-
-  doc.setTextColor(isAllHaccpCompliant ? 16 : 180, isAllHaccpCompliant ? 130 : 20, 40);
-  doc.text(
-    isAllHaccpCompliant ? '100% Cold-Chain Compliant (<= 5.0 C)' : 'HACCP Temperature Breach Detected',
-    startX + totalWidth - 78,
-    finalY + 6
-  );
-
-  const signY = finalY + 12;
   doc.setFillColor(255, 255, 255);
-  doc.setDrawColor(30, 27, 24);
-  doc.setLineWidth(0.4);
-  doc.rect(startX, signY, totalWidth, 32, 'S');
+  doc.setDrawColor(28, 25, 23);
+  doc.setLineWidth(0.45);
+  doc.roundedRect(startX, signStartY, totalWidth, signHeight, 2, 2, 'S');
 
-  doc.setFillColor(30, 27, 24);
-  doc.rect(startX, signY, totalWidth, 5.5, 'F');
-  doc.setFontSize(7);
+  // Black header bar
+  doc.setFillColor(28, 25, 23);
+  doc.rect(startX, signStartY, totalWidth, 5.5, 'F');
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'bold');
   doc.setTextColor(255, 255, 255);
-  doc.text('VERIFICATION & CUSTODY HANDOVER SIGN-OFF (STRICT HACCP AUDIT PROTOCOL)', startX + 4, signY + 4);
+  doc.text('VERIFICATION & CUSTODY HANDOVER SIGN-OFF (STRICT HACCP AUDIT PROTOCOL)', startX + 4, signStartY + 3.8);
 
+  // 3 Columns with vertical dividers
   const colW = totalWidth / 3;
-  doc.setDrawColor(200, 200, 205);
+  doc.setDrawColor(28, 25, 23);
   doc.setLineWidth(0.3);
-  doc.line(startX + colW, signY + 5.5, startX + colW, signY + 32);
-  doc.line(startX + colW * 2, signY + 5.5, startX + colW * 2, signY + 32);
+  doc.line(startX + colW, signStartY + 5.5, startX + colW, signStartY + signHeight);
+  doc.line(startX + colW * 2, signStartY + 5.5, startX + colW * 2, signStartY + signHeight);
 
-  doc.setFontSize(7);
+  // Column 1: Central Kitchen QA
+  const c1X = startX + 3;
+  doc.setFontSize(5.2);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(80, 80, 80);
-  doc.text('1. Central Kitchen QA Supervisor', startX + 4, signY + 10);
-  doc.setFontSize(8);
-  doc.setTextColor(20, 20, 20);
-  doc.text(log.supervisor || 'QA Officer', startX + 4, signY + 16);
-  doc.setFontSize(6.5);
-  doc.setTextColor(100, 100, 100);
-  doc.text('Authorized Signature: __________________', startX + 4, signY + 26);
+  doc.setTextColor(120, 113, 108);
+  doc.text('1. CENTRAL KITCHEN DISPATCH QA', c1X, signStartY + 9);
+  doc.setFontSize(7.5);
+  doc.setTextColor(28, 25, 23);
+  doc.text(supervisorStr, c1X, signStartY + 13.5);
+  doc.setFontSize(6.0);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(120, 113, 108);
+  doc.text(`Date: ${dateStr} @ ${timeStr}`, c1X, signStartY + 17);
 
-  doc.setFontSize(7);
+  doc.setLineDashPattern([1, 1], 0);
+  doc.setDrawColor(168, 162, 158);
+  doc.line(c1X, signStartY + 19.5, startX + colW - 3, signStartY + 19.5);
+  doc.setLineDashPattern([], 0);
+
+  doc.setFontSize(5.2);
+  doc.setTextColor(120, 113, 108);
+  doc.text('Authorized Signature:', c1X, signStartY + 23);
+  doc.setDrawColor(214, 211, 209);
+  doc.setLineWidth(0.3);
+  doc.line(c1X, signStartY + 29, startX + colW - 3, signStartY + 29);
+
+  // Column 2: Cold-Chain Driver
+  const c2X = startX + colW + 3;
+  doc.setFontSize(5.2);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(80, 80, 80);
-  doc.text('2. Cold-Chain Transport Driver', startX + colW + 4, signY + 10);
-  doc.setFontSize(8);
-  doc.setTextColor(20, 20, 20);
-  doc.text(log.driverName || 'Driver', startX + colW + 4, signY + 16);
-  doc.setFontSize(6.5);
-  doc.setTextColor(100, 100, 100);
-  doc.text('Driver Signature: ______________________', startX + colW + 4, signY + 26);
+  doc.setTextColor(120, 113, 108);
+  doc.text('2. COLD-CHAIN TRANSPORT DRIVER', c2X, signStartY + 9);
+  doc.setFontSize(7.5);
+  doc.setTextColor(28, 25, 23);
+  doc.text(driverStr, c2X, signStartY + 13.5);
+  doc.setFontSize(6.0);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(120, 113, 108);
+  doc.text(`Vehicle: ${vehicleStr}`, c2X, signStartY + 17);
 
-  doc.setFontSize(7);
+  doc.setLineDashPattern([1, 1], 0);
+  doc.setDrawColor(168, 162, 158);
+  doc.line(c2X, signStartY + 19.5, startX + colW * 2 - 3, signStartY + 19.5);
+  doc.setLineDashPattern([], 0);
+
+  doc.setFontSize(5.2);
+  doc.setTextColor(120, 113, 108);
+  doc.text('Driver Acceptance Signature:', c2X, signStartY + 23);
+  doc.setDrawColor(214, 211, 209);
+  doc.setLineWidth(0.3);
+  doc.line(c2X, signStartY + 29, startX + colW * 2 - 3, signStartY + 29);
+
+  // Column 3: Store Receiving Barista
+  const c3X = startX + colW * 2 + 3;
+  doc.setFontSize(5.2);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(80, 80, 80);
-  doc.text('3. Retail Store Receiving Barista', startX + colW * 2 + 4, signY + 10);
-  doc.setFontSize(8);
-  doc.setTextColor(20, 20, 20);
-  doc.text('Receiving Store Staff', startX + colW * 2 + 4, signY + 16);
-  doc.setFontSize(6.5);
-  doc.setTextColor(100, 100, 100);
-  doc.text('Store Stamp & Sign: ____________________', startX + colW * 2 + 4, signY + 26);
+  doc.setTextColor(120, 113, 108);
+  doc.text('3. RETAIL STORE RECEIVING BARISTA', c3X, signStartY + 9);
+  doc.setFontSize(7.5);
+  doc.setTextColor(28, 25, 23);
+  doc.text('Branch Receiving Barista', c3X, signStartY + 13.5);
+  doc.setFontSize(6.0);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(120, 113, 108);
+  doc.text('Temp on Arrival: ______ C', c3X, signStartY + 17);
 
-  doc.setFontSize(6.5);
-  doc.setTextColor(130, 130, 130);
-  doc.text(`Barista Coffee Lanka - BCL/REC/HACCP/32 - Doc Ref: ${documentName} (${revision} / ${version}) - Report #: ${reportNo}`, startX, 287);
-  doc.text(`Printed: ${new Date().toLocaleString()}`, startX + totalWidth - 45, 287);
+  doc.setLineDashPattern([1, 1], 0);
+  doc.setDrawColor(168, 162, 158);
+  doc.line(c3X, signStartY + 19.5, startX + totalWidth - 3, signStartY + 19.5);
+  doc.setLineDashPattern([], 0);
+
+  doc.setFontSize(5.2);
+  doc.setTextColor(120, 113, 108);
+  doc.text('Store Stamp & Signature:', c3X, signStartY + 23);
+  doc.setDrawColor(214, 211, 209);
+  doc.setLineWidth(0.3);
+  doc.line(c3X, signStartY + 29, startX + totalWidth - 3, signStartY + 29);
+
+  // ==========================================
+  // SECTION 5: CONTROLLED DOCUMENT FOOTER
+  // ==========================================
+  const footerY = 286;
+  doc.setDrawColor(214, 211, 209);
+  doc.setLineWidth(0.2);
+  doc.line(startX, footerY - 2.5, startX + totalWidth, footerY - 2.5);
+
+  doc.setFontSize(5.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(120, 113, 108);
+  doc.text('Barista Coffee Lanka - BCL/REC/HACCP/32 - Controlled Document', startX, footerY);
+  doc.text(`Printed on: ${new Date().toLocaleString()}`, 105, footerY, { align: 'center' });
+  doc.text('Page 1 of 1', startX + totalWidth, footerY, { align: 'right' });
 
   return doc;
 }

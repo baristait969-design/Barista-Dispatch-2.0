@@ -4,7 +4,7 @@ import { DispatchLog } from '../types';
 import { BaristaLogo } from './BaristaLogo';
 import { DocumentHaccpHeader } from './DocumentHaccpHeader';
 import { generateExecutiveReportPDF } from '../utils/pdfExport';
-import { printHtmlElement, syncToPrintRoot, clearPrintRoot } from '../utils/printUtils';
+import { printHtmlElement, syncToPrintRoot, clearPrintRoot, downloadHtmlElementAsPDF } from '../utils/printUtils';
 
 interface PrintableExecutiveReportModalProps {
   logs: DispatchLog[];
@@ -35,8 +35,12 @@ export const PrintableExecutiveReportModal: React.FC<PrintableExecutiveReportMod
     printHtmlElement('printable-executive-report-content', `Barista_Executive_Report_${todayStr}`);
   };
 
-  const handleDownloadPDF = () => {
-    generateExecutiveReportPDF(logs, stats, generatedBy, filterPeriod);
+  const handleDownloadPDF = async () => {
+    await downloadHtmlElementAsPDF(
+      'printable-executive-report-content',
+      `Barista_Executive_Report_${todayStr}.pdf`,
+      'landscape'
+    );
   };
 
   React.useEffect(() => {

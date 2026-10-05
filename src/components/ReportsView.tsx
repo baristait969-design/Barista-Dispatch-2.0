@@ -16,8 +16,7 @@ import {
   Boxes,
   Calendar,
   ChevronLeft,
-  ChevronRight,
-  Trash2
+  ChevronRight
 } from 'lucide-react';
 import { DispatchLog, InventoryBatch, Outlet, Driver, UserProfile } from '../types';
 import { PrintableDispatchSheet } from './PrintableDispatchSheet';
@@ -26,7 +25,6 @@ import { BaristaLogo } from './BaristaLogo';
 import { generateExecutiveReportPDF, generateSingleDispatchPDF } from '../utils/pdfExport';
 import { getDispatchReportNo, getDispatchDocumentName } from '../utils/dispatchNumberUtils';
 import { useModal } from '../context/ModalDialogContext';
-import { deleteDispatchLog } from '../services/dataService';
 
 interface ReportsViewProps {
   dispatchLogs: DispatchLog[];
@@ -121,42 +119,6 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     if (nextStr > currentMonthPrefix) return;
     setSelectedMonth(nextStr);
     setDatePreset('all');
-  };
-
-  const handleDeleteLog = async (log: DispatchLog) => {
-    if (!canExport) {
-      showAlert('Your role has read-only access. Only Admin or Kitchen Editor can delete dispatch records.', {
-        title: 'Access Restricted',
-        type: 'security'
-      });
-      return;
-    }
-
-    const docTitle = log.documentName || log.reportNo || 'this dispatch record';
-    const confirmed = await showConfirm(
-      `Are you sure you want to permanently delete dispatch record "${docTitle}"? This will remove it from all audit reports and cannot be undone.`,
-      {
-        title: 'Delete Dispatch Record',
-        type: 'danger',
-        confirmText: 'Delete Record',
-        cancelText: 'Cancel'
-      }
-    );
-
-    if (!confirmed) return;
-
-    try {
-      await deleteDispatchLog(log.id);
-      showAlert(`Dispatch record "${docTitle}" was permanently deleted.`, {
-        title: 'Record Deleted',
-        type: 'success'
-      });
-    } catch (err: any) {
-      showAlert('Failed to delete dispatch log: ' + err.message, {
-        title: 'Deletion Error',
-        type: 'error'
-      });
-    }
   };
 
   const filteredLogs = useMemo(() => {
@@ -933,16 +895,6 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                               <Printer className="w-3 h-3" />
                               <span>Print</span>
                             </button>
-                            {(hasAccess('reports', 'edit') || role === 'admin') && (
-                              <button
-                                onClick={() => handleDeleteLog(log)}
-                                className="px-2.5 py-1.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white border border-rose-800/80 rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer shadow-sm"
-                                title="Permanently delete this dispatch record"
-                              >
-                                <Trash2 className="w-3 h-3 text-rose-400" />
-                                <span>Delete</span>
-                              </button>
-                            )}
                           </div>
                         </td>
                       </tr>
