@@ -16,7 +16,9 @@ import {
   Calendar,
   CheckCircle2,
   Trash2,
-  ShieldCheck
+  ShieldCheck,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { InventoryBatch, DispatchLog, Outlet, Product, MonthlyDispatchCycle } from '../types';
 import { 
@@ -107,6 +109,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const currentMonthPrefix = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, '0')}`;
   const currentMonthName = now.toLocaleString('default', { month: 'long', year: 'numeric' });
 
+  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthPrefix);
+
+  const formatMonthLabel = (mStr: string) => {
+    if (!mStr || mStr === 'all') return 'All Historical Records';
+    try {
+      const [year, month] = mStr.split('-');
+      const date = new Date(parseInt(year, 10), parseInt(month, 10) - 1, 1);
+      return date.toLocaleString('default', { month: 'long', year: 'numeric' });
+    } catch {
+      return mStr;
+    }
+  };
+
+  const START_MONTH = '2026-09';
+
+  const goToPreviousMonth = () => {
+    if (selectedMonth <= START_MONTH) return;
+    const [year, month] = selectedMonth.split('-').map(Number);
+    const d = new Date(year, month - 2, 1);
+    const prevStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (prevStr < START_MONTH) {
+      setSelectedMonth(START_MONTH);
+      return;
+    }
+    setSelectedMonth(prevStr);
+  };
+
+  const goToNextMonth = () => {
+    if (selectedMonth >= currentMonthPrefix) return;
+    const [year, month] = selectedMonth.split('-').map(Number);
+    const d = new Date(year, month, 1);
+    const nextStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (nextStr > currentMonthPrefix) return;
+    setSelectedMonth(nextStr);
+  };
+
   // 1st of the CURRENT month at 12:00 A.M.
   const firstOfCurrentMonth = useMemo(() => {
     return new Date(currentYear, currentMonthIndex, 1, 0, 0, 0, 0);
@@ -159,29 +197,50 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return firstTime;
   }, [firstOfCurrentMonth, cycleState?.lastResetAt]);
 
-  // Filter logs for the ACTIVE MONTHLY CYCLE:
-  // Starts on the 1st of the month at 12:00 A.M. (or at latest reset) and resets on each and every month 1st at 12:00 A.M.
+  // Filter logs for the ACTIVE/SELECTED MONTHLY CYCLE:
   const monthlyDispatches = useMemo(() => {
     return dispatchLogs.filter((d) => {
-      // Must be in the current calendar month
-      const matchesDate = Boolean(d.date && d.date.startsWith(currentMonthPrefix));
-      const matchesCreated = Boolean(d.createdAt && d.createdAt.startsWith(currentMonthPrefix));
-      if (!matchesDate && !matchesCreated) return false;
+      // Exclude soft-deleted or superseded records
+      if (d.deleted || (d as any).isDeleted || d.status === 'deleted') return false;
+      if (d.supersededBy) return false;
 
-      // Must be created on or after the cycle reset cutoff timestamp
-      const itemTime = new Date(d.createdAt || d.date).getTime();
-      if (!isNaN(itemTime) && itemTime < cycleCutoffTime) {
-        return false;
+      const dMonth = (d.date || d.createdAt || '').substring(0, 7);
+      if (selectedMonth && dMonth !== selectedMonth) return false;
+
+      // If viewing the current calendar month, also respect cycle reset cutoff if applicable
+      if (selectedMonth === currentMonthPrefix && cycleCutoffTime) {
+        const itemTime = new Date(d.createdAt || d.date).getTime();
+        if (!isNaN(itemTime) && itemTime < cycleCutoffTime) {
+          return false;
+        }
       }
 
       return true;
     });
-  }, [dispatchLogs, currentMonthPrefix, cycleCutoffTime]);
+  }, [dispatchLogs, selectedMonth, currentMonthPrefix, cycleCutoffTime]);
 
   const monthlyUnitsDispatched = useMemo(() => {
     return monthlyDispatches.reduce((acc, log) => {
       return acc + log.items.reduce((s, i) => s + (i.quantity || 0), 0);
     }, 0);
+  }, [monthlyDispatches]);
+
+  const monthlyOutletsServed = useMemo(() => {
+    const outletSet = new Set<string>();
+    monthlyDispatches.forEach(d => {
+      d.outletNames.forEach(name => outletSet.add(name));
+    });
+    return outletSet.size;
+  }, [monthlyDispatches]);
+
+  const monthlyProductsDispatched = useMemo(() => {
+    const prodSet = new Set<string>();
+    monthlyDispatches.forEach(d => {
+      d.items.forEach(i => {
+        if (i.quantity > 0) prodSet.add(i.productName);
+      });
+    });
+    return prodSet.size;
   }, [monthlyDispatches]);
 
   const todayDispatches = useMemo(() => {
@@ -325,6 +384,63 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
+      {/* MONTHLY QA & DISPATCH SUMMARY CONTROLLER (Monthly Changeable Front Dashboard) */}
+      <div className="bg-[#181311] border border-[#2E221E] rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
+        <div className="flex items-center space-x-3 self-start sm:self-auto">
+          <div className="w-10 h-10 rounded-xl bg-[#ED5338]/15 border border-[#ED5338]/30 flex items-center justify-center text-[#ED5338] shrink-0">
+            <Calendar className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-stone-200">
+                Monthly QA & Dispatch Summary
+              </span>
+              <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/25 px-2 py-0.5 rounded font-mono font-bold">
+                {formatMonthLabel(selectedMonth)}
+              </span>
+            </div>
+            <p className="text-[11px] text-stone-400 mt-0.5">
+              Displaying operational metrics, food safety adherence, and retail output for {formatMonthLabel(selectedMonth)}.
+            </p>
+          </div>
+        </div>
+
+        {/* Monthly Switcher (Changeable via Arrows Only) */}
+        <div className="flex items-center space-x-2 bg-stone-950 border border-stone-800 rounded-xl p-1.5 shrink-0 self-stretch sm:self-auto justify-between sm:justify-start">
+          <button
+            type="button"
+            onClick={goToPreviousMonth}
+            disabled={selectedMonth <= START_MONTH}
+            className={`p-1.5 rounded-lg transition ${
+              selectedMonth <= START_MONTH
+                ? 'opacity-30 cursor-not-allowed text-stone-600'
+                : 'hover:bg-stone-800 text-stone-400 hover:text-white cursor-pointer'
+            }`}
+            title={selectedMonth <= START_MONTH ? "Starts from September 2026" : "Previous Month"}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          <span className="text-xs font-bold text-white px-3 py-1 font-mono tracking-wide select-none min-w-[130px] text-center">
+            {formatMonthLabel(selectedMonth)}
+          </span>
+
+          <button
+            type="button"
+            onClick={goToNextMonth}
+            disabled={selectedMonth >= currentMonthPrefix}
+            className={`p-1.5 rounded-lg transition ${
+              selectedMonth >= currentMonthPrefix
+                ? 'opacity-30 cursor-not-allowed text-stone-600'
+                : 'hover:bg-stone-800 text-stone-400 hover:text-white cursor-pointer'
+            }`}
+            title={selectedMonth >= currentMonthPrefix ? "Future months cannot be selected" : "Next Month"}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
       {/* Key Metrics Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {hasAccess('inventory', 'view') && (
@@ -348,25 +464,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <div className="flex items-center space-x-1.5">
                 <Clock className="w-3.5 h-3.5 text-blue-400" />
                 <span className="text-[10px] bg-blue-500/10 text-blue-300 border border-blue-500/20 px-1.5 py-0.5 rounded font-mono font-bold">
-                  {currentMonthName}
+                  {selectedMonth === 'all' ? 'All Time' : formatMonthLabel(selectedMonth)}
                 </span>
               </div>
             </div>
             <div className="flex items-baseline space-x-1.5 mt-0.5">
               <span className="text-2xl font-black text-white font-mono">{monthlyDispatches.length}</span>
-              <span className="text-xs text-stone-400 font-medium">logs this month</span>
+              <span className="text-xs text-stone-400 font-medium">
+                logs in {formatMonthLabel(selectedMonth)}
+              </span>
             </div>
             <div className="text-[11px] text-stone-400 mt-1.5 flex flex-col space-y-1">
               <div className="flex items-center justify-between">
-                <span>Today: <strong className="text-white font-mono">{todayDispatches}</strong></span>
+                <span>{selectedMonth === currentMonthPrefix ? 'Today:' : 'Branches:'} <strong className="text-white font-mono">{selectedMonth === currentMonthPrefix ? todayDispatches : monthlyOutletsServed}</strong></span>
                 <span>Units: <strong className="text-amber-400 font-mono">{monthlyUnitsDispatched}</strong></span>
               </div>
               <div className="text-[10px] text-stone-400 font-mono flex items-center justify-between pt-1 border-t border-stone-800/80">
                 <span className="text-stone-400 flex items-center space-x-1">
                   <Clock className="w-3 h-3 text-blue-400 shrink-0" />
-                  <span>Next Reset:</span>
+                  <span>Cycle:</span>
                 </span>
-                <span className="text-amber-400 font-semibold">{timeLeftForReset}</span>
+                <span className="text-amber-400 font-semibold">
+                  {selectedMonth === currentMonthPrefix ? timeLeftForReset : formatMonthLabel(selectedMonth)}
+                </span>
               </div>
             </div>
           </div>
@@ -375,28 +495,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {hasAccess('outlets', 'view') && (
           <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 shadow-sm">
             <div className="flex items-center justify-between text-stone-400 text-xs mb-1">
-              <span>Active Outlets</span>
+              <span>Outlets Served</span>
               <Store className="w-4 h-4 text-emerald-400" />
             </div>
             <div className="text-2xl font-black text-white">
-              {outlets.filter(o => o.active).length}
+              {monthlyOutletsServed}
             </div>
             <div className="text-[11px] text-stone-400 mt-1">
-              <span>Network branches ready</span>
+              <span>Branches served in {formatMonthLabel(selectedMonth)}</span>
             </div>
           </div>
         )}
 
         <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 shadow-sm">
           <div className="flex items-center justify-between text-stone-400 text-xs mb-1">
-            <span>Active Products</span>
+            <span>Products Dispatched</span>
             <UtensilsCrossed className="w-4 h-4 text-amber-500" />
           </div>
           <div className="text-2xl font-black text-white">
-            {activeProductsCount}
+            {monthlyProductsDispatched}
           </div>
           <div className="text-[11px] text-stone-400 mt-1">
-            <span>Catalog items active</span>
+            <span>Distinct items in {formatMonthLabel(selectedMonth)}</span>
           </div>
         </div>
       </div>
@@ -500,25 +620,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span>Kitchen Dispatch Records</span>
               </h3>
               <span className="text-[10px] bg-[#221A17] text-[#FFA594] border border-[#382B25] px-2 py-0.5 rounded font-mono font-bold">
-                {dispatchFilterMode === 'monthly' ? currentMonthName : 'All Historical'}
+                {dispatchFilterMode === 'monthly' ? (selectedMonth === 'all' ? 'All Historical' : formatMonthLabel(selectedMonth)) : 'All Historical'}
               </span>
-              {dispatchFilterMode === 'monthly' && (
-                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded font-mono font-semibold">
-                  Active Cycle: {monthlyDispatches.length} Logs
-                </span>
-              )}
+              <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded font-mono font-semibold">
+                {dispatchFilterMode === 'monthly' ? `${monthlyDispatches.length} Logs` : `${dispatchLogs.length} Total Logs`}
+              </span>
             </div>
 
             <p className="text-[11px] text-stone-400 mt-1 flex items-center space-x-1.5 font-mono">
               <Clock className="w-3 h-3 text-amber-500 shrink-0" />
               <span>
-                Current Month Dispatch Cycle ({currentMonthName}) &bull; <strong className="text-amber-400">{timeLeftForReset}</strong>
+                {selectedMonth === currentMonthPrefix
+                  ? `Current Month Dispatch Cycle (${currentMonthName}) • `
+                  : `Selected Cycle: ${formatMonthLabel(selectedMonth)} • `}
+                <strong className="text-amber-400">
+                  {selectedMonth === currentMonthPrefix ? timeLeftForReset : `${monthlyDispatches.length} records`}
+                </strong>
               </span>
             </p>
           </div>
 
           <div className="flex items-center space-x-2 flex-wrap gap-y-2">
-            {/* Filter Toggle: Current Month vs All Time */}
+            {/* Filter Toggle: Selected Month vs All Time */}
             <div className="flex rounded-lg bg-stone-900 p-0.5 border border-stone-800 text-xs">
               <button
                 type="button"
@@ -529,7 +652,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     : 'text-stone-400 hover:text-white'
                 }`}
               >
-                This Month ({monthlyDispatches.length})
+                {selectedMonth === 'all' ? 'All Records' : formatMonthLabel(selectedMonth)} ({monthlyDispatches.length})
               </button>
               <button
                 type="button"
@@ -565,12 +688,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <div className="text-center py-8 text-stone-500 text-xs bg-stone-900/40 rounded-xl border border-dashed border-stone-800 space-y-2 p-4">
                 <p className="text-stone-300 font-semibold text-sm">
                   {dispatchFilterMode === 'monthly'
-                    ? `No active dispatches recorded for ${currentMonthName}.`
+                    ? `No active dispatches recorded for ${formatMonthLabel(selectedMonth)}.`
                     : 'No dispatch logs recorded yet.'}
                 </p>
                 <p className="text-[11px] text-stone-400 max-w-lg mx-auto">
                   {dispatchFilterMode === 'monthly'
-                    ? `Dispatches created for ${currentMonthName} in Dispatch Forms will appear here.`
+                    ? `Dispatches created for ${formatMonthLabel(selectedMonth)} in Dispatch Forms will appear here.`
                     : 'Dispatches issued in Dispatch Forms will appear here.'}
                 </p>
                 {dispatchFilterMode === 'monthly' && dispatchLogs.length > 0 && (

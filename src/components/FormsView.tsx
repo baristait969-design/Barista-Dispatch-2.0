@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { InventoryBatch, Outlet, Driver, DispatchLog, DispatchLineItem, Product, UserProfile } from '../types';
 import { INITIAL_PRODUCTS } from '../data/seedData';
-import { createDispatchLogWithDeduction } from '../services/dataService';
+import { createDispatchLogWithDeduction, deleteDispatchLog } from '../services/dataService';
 import { PrintableDispatchSheet } from './PrintableDispatchSheet';
 import { DocumentHaccpHeader } from './DocumentHaccpHeader';
 import { getAvailableFIFOBatches, isBatchExpired } from '../utils/batchUtils';
@@ -57,13 +57,19 @@ export const FormsView: React.FC<FormsViewProps> = ({
   usersList
 }) => {
   const { userProfile, hasAccess } = useAuth();
-  const { showAlert } = useModal();
+  const { showAlert, showConfirm } = useModal();
   const canEdit = hasAccess('forms', 'edit');
 
   const [activeTab, setActiveTab] = useState<'create' | 'submitted'>('create');
   const [editingLog, setEditingLog] = useState<DispatchLog | null>(null);
   const [revisionNote, setRevisionNote] = useState<string>('');
   const editingLogId = editingLog?.id || null;
+
+  const activeDispatchLogs = useMemo(() => {
+    return dispatchLogs.filter(
+      l => !l.deleted && !(l as any).isDeleted && l.status !== 'deleted' && !l.supersededBy
+    );
+  }, [dispatchLogs]);
 
   const [selectedLogForPrint, setSelectedLogForPrint] = useState<DispatchLog | null>(null);
   const [lastSubmittedLog, setLastSubmittedLog] = useState<DispatchLog | null>(null);
@@ -929,6 +935,42 @@ export const FormsView: React.FC<FormsViewProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleDeleteSubmittedLog = async (log: DispatchLog) => {
+    if (!canEdit) {
+      showAlert('You do not have permission to delete dispatch records.', {
+        title: 'Access Restricted',
+        type: 'security'
+      });
+      return;
+    }
+
+    const docTitle = log.documentName || log.reportNo || 'this dispatch log';
+    const confirmed = await showConfirm(
+      `Are you sure you want to permanently delete dispatch document "${docTitle}"? This cannot be undone.`,
+      {
+        title: 'Delete Dispatch Document',
+        type: 'danger',
+        confirmText: 'Delete Document',
+        cancelText: 'Cancel'
+      }
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await deleteDispatchLog(log.id);
+      showAlert(`Dispatch document "${docTitle}" was permanently deleted.`, {
+        title: 'Document Deleted',
+        type: 'success'
+      });
+    } catch (err: any) {
+      showAlert('Failed to delete dispatch log: ' + err.message, {
+        title: 'Deletion Error',
+        type: 'error'
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner and Navigation */}
@@ -961,7 +1003,7 @@ export const FormsView: React.FC<FormsViewProps> = ({
               }`}
             >
               <History className="w-3.5 h-3.5" />
-              <span>Submitted Archive ({dispatchLogs.length})</span>
+              <span>Submitted Archive ({activeDispatchLogs.length})</span>
             </button>
           </div>
         </div>
@@ -1053,13 +1095,13 @@ export const FormsView: React.FC<FormsViewProps> = ({
             </button>
           </div>
 
-          {dispatchLogs.length === 0 ? (
+          {activeDispatchLogs.length === 0 ? (
             <div className="py-12 text-center text-stone-500 text-xs">
               No dispatch logs submitted yet.
             </div>
           ) : (
             <div className="divide-y divide-stone-800">
-              {dispatchLogs.map((log) => {
+              {activeDispatchLogs.map((log) => {
                 const docName = log.documentName || getDispatchDocumentName(log);
                 const repNo = log.reportNo || getDispatchReportNo(log);
                 const rev = log.revision || 'Rev 01';
@@ -1127,6 +1169,17 @@ export const FormsView: React.FC<FormsViewProps> = ({
                         <Download className="w-3.5 h-3.5" />
                         <span>PDF</span>
                       </button>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSubmittedLog(log)}
+                          className="px-2.5 py-1.5 bg-stone-800 hover:bg-rose-950/80 text-rose-400 border border-stone-700 hover:border-rose-800 rounded-lg text-xs font-medium transition flex items-center space-x-1 cursor-pointer"
+                          title="Permanently delete this dispatch record"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

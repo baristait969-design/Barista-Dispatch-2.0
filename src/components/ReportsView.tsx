@@ -16,7 +16,8 @@ import {
   Boxes,
   Calendar,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Trash2
 } from 'lucide-react';
 import { DispatchLog, InventoryBatch, Outlet, Driver, UserProfile } from '../types';
 import { PrintableDispatchSheet } from './PrintableDispatchSheet';
@@ -25,6 +26,7 @@ import { BaristaLogo } from './BaristaLogo';
 import { generateExecutiveReportPDF, generateSingleDispatchPDF } from '../utils/pdfExport';
 import { getDispatchReportNo, getDispatchDocumentName } from '../utils/dispatchNumberUtils';
 import { useModal } from '../context/ModalDialogContext';
+import { deleteDispatchLog } from '../services/dataService';
 
 interface ReportsViewProps {
   dispatchLogs: DispatchLog[];
@@ -42,7 +44,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   usersList = []
 }) => {
   const { userProfile, role, hasAccess } = useAuth();
-  const { showAlert } = useModal();
+  const { showAlert, showConfirm } = useModal();
 
   const canViewReports = hasAccess('reports', 'view');
   const canExport = hasAccess('reports', 'edit') || role === 'admin';
@@ -73,7 +75,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   const currentMonthPrefix = todayStr.substring(0, 7);
 
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthPrefix);
-  const [datePreset, setDatePreset] = useState<'month' | 'today' | '7days' | '30days' | 'all' | 'custom'>('month');
+  const [datePreset, setDatePreset] = useState<'all' | 'today' | '7days' | '30days' | 'custom'>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [selectedOutletFilter, setSelectedOutletFilter] = useState<string>('all');
@@ -95,63 +97,79 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     }
   };
 
-  const monthOptions = useMemo(() => {
-    const set = new Set<string>();
-    set.add(currentMonthPrefix);
-    
-    dispatchLogs.forEach(log => {
-      const d = log.date || log.createdAt;
-      if (d && d.length >= 7) {
-        set.add(d.substring(0, 7));
-      }
-    });
-
-    const now = new Date();
-    for (let i = 1; i <= 6; i++) {
-      const past = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const str = `${past.getFullYear()}-${String(past.getMonth() + 1).padStart(2, '0')}`;
-      set.add(str);
-    }
-
-    return Array.from(set).sort().reverse().map(m => ({
-      value: m,
-      label: formatMonthLabel(m)
-    }));
-  }, [dispatchLogs, currentMonthPrefix]);
+  const START_MONTH = '2026-09';
 
   const goToPreviousMonth = () => {
-    if (selectedMonth === 'all') {
-      setSelectedMonth(currentMonthPrefix);
-      return;
-    }
+    if (selectedMonth <= START_MONTH) return;
     const [year, month] = selectedMonth.split('-').map(Number);
     const d = new Date(year, month - 2, 1);
     const prevStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (prevStr < START_MONTH) {
+      setSelectedMonth(START_MONTH);
+      setDatePreset('all');
+      return;
+    }
     setSelectedMonth(prevStr);
+    setDatePreset('all');
   };
 
   const goToNextMonth = () => {
-    if (selectedMonth === 'all') {
-      setSelectedMonth(currentMonthPrefix);
-      return;
-    }
+    if (selectedMonth >= currentMonthPrefix) return;
     const [year, month] = selectedMonth.split('-').map(Number);
     const d = new Date(year, month, 1);
     const nextStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (nextStr > currentMonthPrefix) return;
     setSelectedMonth(nextStr);
+    setDatePreset('all');
+  };
+
+  const handleDeleteLog = async (log: DispatchLog) => {
+    if (!canExport) {
+      showAlert('Your role has read-only access. Only Admin or Kitchen Editor can delete dispatch records.', {
+        title: 'Access Restricted',
+        type: 'security'
+      });
+      return;
+    }
+
+    const docTitle = log.documentName || log.reportNo || 'this dispatch record';
+    const confirmed = await showConfirm(
+      `Are you sure you want to permanently delete dispatch record "${docTitle}"? This will remove it from all audit reports and cannot be undone.`,
+      {
+        title: 'Delete Dispatch Record',
+        type: 'danger',
+        confirmText: 'Delete Record',
+        cancelText: 'Cancel'
+      }
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await deleteDispatchLog(log.id);
+      showAlert(`Dispatch record "${docTitle}" was permanently deleted.`, {
+        title: 'Record Deleted',
+        type: 'success'
+      });
+    } catch (err: any) {
+      showAlert('Failed to delete dispatch log: ' + err.message, {
+        title: 'Deletion Error',
+        type: 'error'
+      });
+    }
   };
 
   const filteredLogs = useMemo(() => {
     return dispatchLogs.filter(log => {
-      // Monthly cycle filter
-      if (selectedMonth !== 'all') {
-        const matchesMonth = Boolean(
-          (log.date && log.date.startsWith(selectedMonth)) ||
-          (log.createdAt && log.createdAt.startsWith(selectedMonth))
-        );
-        if (!matchesMonth) return false;
-      }
+      // Exclude soft-deleted or superseded records
+      if (log.deleted || (log as any).isDeleted || log.status === 'deleted') return false;
+      if (log.supersededBy) return false;
 
+      // Monthly cycle filter
+      const logMonth = (log.date || log.createdAt || '').substring(0, 7);
+      if (selectedMonth && logMonth !== selectedMonth) return false;
+
+      // Sub-filter by selected Time Period preset
       if (datePreset === 'today') {
         if (log.date !== todayStr) return false;
       } else if (datePreset === '7days') {
@@ -202,7 +220,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
       return true;
     });
-  }, [dispatchLogs, datePreset, startDate, endDate, selectedOutletFilter, selectedDriverFilter, haccpFilter, searchQuery, todayStr]);
+  }, [dispatchLogs, selectedMonth, datePreset, startDate, endDate, selectedOutletFilter, selectedDriverFilter, haccpFilter, searchQuery, todayStr]);
 
   const totalDispatches = filteredLogs.length;
   const totalUnitsDispatched = useMemo(() => {
@@ -500,60 +518,48 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 Monthly QA & Dispatch Summary
               </span>
               <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/25 px-2 py-0.5 rounded font-mono font-bold">
-                {selectedMonth === 'all' ? 'All Historical Records' : formatMonthLabel(selectedMonth)}
+                {formatMonthLabel(selectedMonth)}
               </span>
             </div>
             <p className="text-[11px] text-stone-400 mt-0.5">
-              {selectedMonth === 'all' 
-                ? 'Displaying cumulative operational metrics across all historical dispatches.'
-                : `Displaying operational metrics, food safety adherence, and retail output for ${formatMonthLabel(selectedMonth)}.`}
+              Displaying operational metrics, food safety adherence, and retail output for {formatMonthLabel(selectedMonth)}.
             </p>
           </div>
         </div>
 
-        {/* Monthly Switcher (Changeable) */}
+        {/* Monthly Switcher (Changeable via Arrows Only) */}
         <div className="flex items-center space-x-2 bg-stone-950 border border-stone-800 rounded-xl p-1.5 shrink-0 self-stretch sm:self-auto justify-between sm:justify-start">
           <button
             type="button"
             onClick={goToPreviousMonth}
-            className="p-1.5 hover:bg-stone-800 text-stone-400 hover:text-white rounded-lg transition cursor-pointer"
-            title="Previous Month"
+            disabled={selectedMonth <= START_MONTH}
+            className={`p-1.5 rounded-lg transition ${
+              selectedMonth <= START_MONTH
+                ? 'opacity-30 cursor-not-allowed text-stone-600'
+                : 'hover:bg-stone-800 text-stone-400 hover:text-white cursor-pointer'
+            }`}
+            title={selectedMonth <= START_MONTH ? "Starts from September 2026" : "Previous Month"}
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
 
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="bg-transparent text-xs font-bold text-white px-2 py-1 focus:outline-none cursor-pointer font-mono"
-          >
-            {monthOptions.map(opt => (
-              <option key={opt.value} value={opt.value} className="bg-stone-900 text-white">
-                {opt.label}
-              </option>
-            ))}
-            <option value="all" className="bg-stone-900 text-white">All Historical Records</option>
-          </select>
+          <span className="text-xs font-bold text-white px-3 py-1 font-mono tracking-wide select-none min-w-[130px] text-center">
+            {formatMonthLabel(selectedMonth)}
+          </span>
 
           <button
             type="button"
             onClick={goToNextMonth}
-            className="p-1.5 hover:bg-stone-800 text-stone-400 hover:text-white rounded-lg transition cursor-pointer"
-            title="Next Month"
+            disabled={selectedMonth >= currentMonthPrefix}
+            className={`p-1.5 rounded-lg transition ${
+              selectedMonth >= currentMonthPrefix
+                ? 'opacity-30 cursor-not-allowed text-stone-600'
+                : 'hover:bg-stone-800 text-stone-400 hover:text-white cursor-pointer'
+            }`}
+            title={selectedMonth >= currentMonthPrefix ? "Future months cannot be selected" : "Next Month"}
           >
             <ChevronRight className="w-4 h-4" />
           </button>
-
-          {selectedMonth !== currentMonthPrefix && (
-            <button
-              type="button"
-              onClick={() => setSelectedMonth(currentMonthPrefix)}
-              className="text-[10px] font-bold text-amber-400 hover:text-amber-300 px-2 py-1 bg-amber-500/10 rounded-lg border border-amber-500/30 transition cursor-pointer ml-1"
-              title="Return to Current Month"
-            >
-              Current Month
-            </button>
-          )}
         </div>
       </div>
 
@@ -676,9 +682,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               onChange={(e) => setDatePreset(e.target.value as any)}
               className="w-full px-2.5 py-2 bg-stone-950 border border-stone-700 rounded-lg text-xs text-stone-100 font-medium focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 cursor-pointer"
             >
-              <option value="month" className="bg-stone-900 text-stone-100">
-                {selectedMonth === 'all' ? 'All Historical Records' : `Selected Month (${formatMonthLabel(selectedMonth)})`}
-              </option>
+              <option value="all" className="bg-stone-900 text-stone-100">All Dispatches</option>
               <option value="today" className="bg-stone-900 text-stone-100">Today Only ({todayStr})</option>
               <option value="7days" className="bg-stone-900 text-stone-100">Last 7 Days</option>
               <option value="30days" className="bg-stone-900 text-stone-100">Last 30 Days</option>
@@ -929,6 +933,16 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                               <Printer className="w-3 h-3" />
                               <span>Print</span>
                             </button>
+                            {(hasAccess('reports', 'edit') || role === 'admin') && (
+                              <button
+                                onClick={() => handleDeleteLog(log)}
+                                className="px-2.5 py-1.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white border border-rose-800/80 rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer shadow-sm"
+                                title="Permanently delete this dispatch record"
+                              >
+                                <Trash2 className="w-3 h-3 text-rose-400" />
+                                <span>Delete</span>
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

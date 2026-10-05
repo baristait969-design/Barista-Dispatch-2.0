@@ -129,7 +129,12 @@ export interface DispatchLog {
   haccpCompliant: boolean;
   notes?: string;
   editReason?: string; // Reason or description of revision changes
-  status: 'submitted' | 'in_transit' | 'delivered' | 'edited';
+  status: 'submitted' | 'in_transit' | 'delivered' | 'edited' | 'deleted';
+  supersededBy?: string; // ID of newer revision replacing this document
+  supersededByDocName?: string;
+  latestRevision?: string;
+  deleted?: boolean;
+  isDeleted?: boolean;
   createdAt: string;
   updatedAt?: string;
 }

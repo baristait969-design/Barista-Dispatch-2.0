@@ -761,7 +761,11 @@ export function subscribeDispatchLogs(callback: (logs: DispatchLog[]) => void) {
     (snapshot) => {
       const items: DispatchLog[] = [];
       snapshot.forEach((d) => {
-        items.push({ id: d.id, ...d.data() } as DispatchLog);
+        const data = d.data() as any;
+        if (data.deleted === true || data.isDeleted === true || data.status === 'deleted') {
+          return;
+        }
+        items.push({ id: d.id, ...data } as DispatchLog);
       });
       items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       callback(items);
@@ -878,6 +882,14 @@ export async function updateDispatchLog(
 export async function deleteDispatchLog(id: string): Promise<void> {
   try {
     await deleteDoc(doc(db, DISPATCH_COL, id));
+    try {
+      await setDoc(doc(db, 'deleted_dispatches', id), {
+        id,
+        deletedAt: new Date().toISOString()
+      });
+    } catch (tombErr) {
+      console.warn('Could not record deleted_dispatches tombstone:', tombErr);
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `${DISPATCH_COL}/${id}`);
     throw error;
