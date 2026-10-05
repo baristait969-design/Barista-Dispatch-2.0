@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { InventoryBatch, Outlet, Driver, DispatchLog, DispatchLineItem, Product, UserProfile } from '../types';
 import { INITIAL_PRODUCTS } from '../data/seedData';
-import { createDispatchLogWithDeduction, deleteDispatchLog } from '../services/dataService';
+import { createDispatchLogWithDeduction } from '../services/dataService';
 import { PrintableDispatchSheet } from './PrintableDispatchSheet';
 import { DocumentHaccpHeader } from './DocumentHaccpHeader';
 import { getAvailableFIFOBatches, isBatchExpired } from '../utils/batchUtils';
@@ -935,42 +935,6 @@ export const FormsView: React.FC<FormsViewProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDeleteSubmittedLog = async (log: DispatchLog) => {
-    if (!canEdit) {
-      showAlert('You do not have permission to delete dispatch records.', {
-        title: 'Access Restricted',
-        type: 'security'
-      });
-      return;
-    }
-
-    const docTitle = log.documentName || log.reportNo || 'this dispatch log';
-    const confirmed = await showConfirm(
-      `Are you sure you want to permanently delete dispatch document "${docTitle}"? This cannot be undone.`,
-      {
-        title: 'Delete Dispatch Document',
-        type: 'danger',
-        confirmText: 'Delete Document',
-        cancelText: 'Cancel'
-      }
-    );
-
-    if (!confirmed) return;
-
-    try {
-      await deleteDispatchLog(log.id);
-      showAlert(`Dispatch document "${docTitle}" was permanently deleted.`, {
-        title: 'Document Deleted',
-        type: 'success'
-      });
-    } catch (err: any) {
-      showAlert('Failed to delete dispatch log: ' + err.message, {
-        title: 'Deletion Error',
-        type: 'error'
-      });
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* Top Banner and Navigation */}
@@ -1169,17 +1133,13 @@ export const FormsView: React.FC<FormsViewProps> = ({
                         <Download className="w-3.5 h-3.5" />
                         <span>PDF</span>
                       </button>
-                      {canEdit && (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSubmittedLog(log)}
-                          className="px-2.5 py-1.5 bg-stone-800 hover:bg-rose-950/80 text-rose-400 border border-stone-700 hover:border-rose-800 rounded-lg text-xs font-medium transition flex items-center space-x-1 cursor-pointer"
-                          title="Permanently delete this dispatch record"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Delete</span>
-                        </button>
-                      )}
+                      <span
+                        className="px-2 py-1.5 bg-stone-900 border border-stone-800 text-stone-400 rounded-lg text-[10px] font-mono flex items-center space-x-1 select-none"
+                        title="HACCP Audit Standard: Once submitted, dispatch records are permanent & immutable"
+                      >
+                        <Lock className="w-3 h-3 text-stone-500" />
+                        <span>Immutable</span>
+                      </span>
                     </div>
                   </div>
                 );

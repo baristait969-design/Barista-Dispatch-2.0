@@ -879,21 +879,8 @@ export async function updateDispatchLog(
   }
 }
 
-export async function deleteDispatchLog(id: string): Promise<void> {
-  try {
-    await deleteDoc(doc(db, DISPATCH_COL, id));
-    try {
-      await setDoc(doc(db, 'deleted_dispatches', id), {
-        id,
-        deletedAt: new Date().toISOString()
-      });
-    } catch (tombErr) {
-      console.warn('Could not record deleted_dispatches tombstone:', tombErr);
-    }
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, `${DISPATCH_COL}/${id}`);
-    throw error;
-  }
+export async function deleteDispatchLog(_id: string): Promise<void> {
+  throw new Error('HACCP Audit Security Protocol: Submitted dispatch logs cannot be deleted once committed. Use "Edit (New Revision)" to generate an updated revision document.');
 }
 
 // ----------------- MONTHLY DISPATCH CYCLE (Resets each month 1st @ 12:00 AM) -----------------

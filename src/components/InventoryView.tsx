@@ -28,6 +28,15 @@ interface InventoryViewProps {
   onRefresh?: () => void;
 }
 
+const normalizeCategory = (cat?: string): 'Hot Kitchen' | 'Pastry Kitchen' => {
+  if (!cat) return 'Pastry Kitchen';
+  const lower = cat.toLowerCase();
+  if (lower.includes('hot') || lower.includes('savory') || lower.includes('beverage')) {
+    return 'Hot Kitchen';
+  }
+  return 'Pastry Kitchen';
+};
+
 export const InventoryView: React.FC<InventoryViewProps> = ({
   batches,
   batchLogs,
@@ -59,7 +68,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [formData, setFormData] = useState(() => ({
     batchNo: getNextBatchNumberForProduct(initialProductName, batches, products),
     productName: initialProductName,
-    category: initialProduct.category || 'Hot Kitchen',
+    category: normalizeCategory(initialProduct.category),
     quantity: 50,
     prodDate: initialToday,
     useByDate: calculateFutureDate(initialToday, initialShelfDays),
@@ -67,16 +76,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     unit: initialUnit
   }));
 
+  const categories = ['Hot Kitchen', 'Pastry Kitchen'];
+
   // Filtered Batches
   const filteredBatches = batches.filter(batch => {
     const matchesSearch = 
       batch.batchNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       batch.productName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = filterCategory === 'all' || batch.category === filterCategory;
+    const normCat = normalizeCategory(batch.category);
+    const matchesCategory = filterCategory === 'all' || normCat === filterCategory;
     return matchesSearch && matchesCategory;
   });
-
-  const categories = Array.from(new Set(batches.map(b => b.category || 'Hot Kitchen')));
 
   const selectedProductMeta = useMemo(() => {
     const activeProducts = products && products.length > 0 ? products : [];
@@ -101,7 +111,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         ...prev,
         batchNo: autoBatchNo,
         productName: found.name,
-        category: found.category || 'Hot Kitchen',
+        category: normalizeCategory(found.category),
         dispatchTemp: Number(defTemp),
         unit: ('unit' in found && found.unit) ? found.unit : 'Slices',
         useByDate: futureDate
@@ -375,11 +385,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                       <td className="py-3.5 px-4 font-semibold text-white">
                         <div>{batch.productName}</div>
                         <span className={`inline-flex items-center space-x-1 text-[10px] font-semibold mt-0.5 px-1.5 py-0.2 rounded ${
-                          batch.category === 'Hot Kitchen' 
+                          normalizeCategory(batch.category) === 'Hot Kitchen' 
                             ? 'bg-orange-500/10 text-orange-300 border border-orange-500/20' 
                             : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
                         }`}>
-                          <span>{batch.category || 'Hot Kitchen'}</span>
+                          <span>{normalizeCategory(batch.category)}</span>
                         </span>
                       </td>
                       <td className="py-3.5 px-4 font-mono text-stone-200">

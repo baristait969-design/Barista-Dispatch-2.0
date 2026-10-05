@@ -39,13 +39,18 @@ interface ProductsViewProps {
 }
 
 const DEFAULT_CATEGORIES = [
-  ...PRODUCT_CATEGORIES,
-  'Bakery & Pastry',
-  'Cakes & Desserts',
-  'Savory Kitchen',
-  'Beverage Bases',
-  'Cold Desserts'
-];
+  'Hot Kitchen',
+  'Pastry Kitchen'
+] as const;
+
+export const normalizeCategory = (cat?: string): 'Hot Kitchen' | 'Pastry Kitchen' => {
+  if (!cat) return 'Pastry Kitchen';
+  const lower = cat.toLowerCase();
+  if (lower.includes('hot') || lower.includes('savory') || lower.includes('beverage')) {
+    return 'Hot Kitchen';
+  }
+  return 'Pastry Kitchen';
+};
 
 export const ProductsView: React.FC<ProductsViewProps> = ({ products }) => {
   const { role } = useAuth();
@@ -79,20 +84,17 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ products }) => {
   }, [products]);
 
   const allCategories = useMemo(() => {
-    const set = new Set<string>(DEFAULT_CATEGORIES);
-    products.forEach(p => {
-      if (p.category) set.add(p.category);
-    });
-    return Array.from(set);
-  }, [products]);
+    return ['Hot Kitchen', 'Pastry Kitchen'];
+  }, []);
 
   const filteredProducts = useMemo(() => {
     return products.filter((prod) => {
       const q = searchTerm.toLowerCase();
+      const normCat = normalizeCategory(prod.category);
       const matchesSearch = 
         prod.name.toLowerCase().includes(q) ||
         prod.productId.toLowerCase().includes(q) ||
-        (prod.category && prod.category.toLowerCase().includes(q));
+        normCat.toLowerCase().includes(q);
       
       const matchesStatus = 
         statusFilter === 'all' ? true :
@@ -101,7 +103,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ products }) => {
 
       const matchesCategory = 
         selectedCategory === 'all' ? true :
-        prod.category === selectedCategory;
+        normCat === selectedCategory;
 
       return matchesSearch && matchesStatus && matchesCategory;
     });
@@ -671,11 +673,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ products }) => {
 
                   <div className="flex items-center space-x-1.5 text-[11px] mb-3">
                     <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-md font-semibold ${
-                      prod.category === 'Hot Kitchen'
+                      normalizeCategory(prod.category) === 'Hot Kitchen'
                         ? 'bg-orange-500/15 text-orange-300 border border-orange-500/30'
                         : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
                     }`}>
-                      <span className="truncate">{prod.category || 'Hot Kitchen'}</span>
+                      <span className="truncate">{normalizeCategory(prod.category)}</span>
                     </span>
                   </div>
 
@@ -1136,7 +1138,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ products }) => {
                   rows={6}
                   value={bulkText}
                   onChange={(e) => setBulkText(e.target.value)}
-                  placeholder={`Carrot Walnut Cake, 3.8, Pastry Kitchen Items, Slices\nChicken Curry Bun, 4.5, Savory Kitchen, Pieces\nCold Brew Bottle 500ml, 2.5, Beverage Bases, Bottles`}
+                  placeholder={`Carrot Walnut Cake, 3.8, Pastry Kitchen, Slices\nChicken Curry Bun, 4.2, Hot Kitchen, NoS\nIced Latte Base, 2.8, Hot Kitchen, Liters (L)`}
                   className="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-xs text-white placeholder-stone-600 focus:outline-none focus:border-amber-500 font-mono"
                 />
               </div>
