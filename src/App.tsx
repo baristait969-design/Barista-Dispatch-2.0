@@ -62,6 +62,14 @@ const MainContent: React.FC = () => {
   }, [hasAccess]);
 
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
+  const [targetFormLogId, setTargetFormLogId] = useState<string | null>(null);
+
+  const handleNavigate = (tab: string, targetId?: string) => {
+    if (targetId && tab === 'forms') {
+      setTargetFormLogId(targetId);
+    }
+    setCurrentTab(tab);
+  };
 
   useEffect(() => {
     if (!userProfile) return;
@@ -175,7 +183,7 @@ const MainContent: React.FC = () => {
                 outlets={outlets}
                 products={products}
                 dispatchCycle={dispatchCycle}
-                onNavigate={(tab) => setCurrentTab(tab)}
+                onNavigate={handleNavigate}
               />
             )}
 
@@ -195,6 +203,8 @@ const MainContent: React.FC = () => {
                 usersList={usersList}
                 dispatchLogs={dispatchLogs}
                 products={products}
+                initialLogId={targetFormLogId}
+                onClearInitialLogId={() => setTargetFormLogId(null)}
               />
             )}
 
@@ -223,6 +233,7 @@ const MainContent: React.FC = () => {
                 outlets={outlets}
                 drivers={drivers}
                 usersList={usersList}
+                onNavigate={handleNavigate}
               />
             )}
           </>

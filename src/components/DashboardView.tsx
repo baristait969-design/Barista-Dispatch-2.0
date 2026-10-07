@@ -27,13 +27,14 @@ import {
   getDefaultMonthlyCycle
 } from '../services/dataService';
 import { getDispatchReportNo, getDispatchDocumentName } from '../utils/dispatchNumberUtils';
+import { PrintableDispatchSheet } from './PrintableDispatchSheet';
 
 interface DashboardViewProps {
   batches: InventoryBatch[];
   dispatchLogs: DispatchLog[];
   outlets: Outlet[];
   products?: Product[];
-  onNavigate: (tab: string) => void;
+  onNavigate: (tab: string, targetId?: string) => void;
   dispatchCycle?: MonthlyDispatchCycle;
 }
 
@@ -47,6 +48,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const { userProfile, role, hasAccess } = useAuth();
   const [dispatchFilterMode, setDispatchFilterMode] = useState<'monthly' | 'all'>('monthly');
+  const [selectedLogForPrint, setSelectedLogForPrint] = useState<DispatchLog | null>(null);
   const [cycleState, setCycleState] = useState<MonthlyDispatchCycle>(
     propDispatchCycle || getDefaultMonthlyCycle()
   );
@@ -746,14 +748,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         Driver: <span className="text-stone-300">{log.driverName}</span> - Supervisor: <span className="text-stone-300">{log.supervisor}</span> - {log.items.length} product line(s) ({log.items.reduce((s, i) => s + (i.quantity || 0), 0)} units)
                       </p>
                     </div>
-                    {(hasAccess('reports', 'view') || hasAccess('forms', 'view')) && (
+                    <div>
                       <button
-                        onClick={() => onNavigate(hasAccess('reports', 'view') ? 'reports' : 'forms')}
-                        className="text-xs bg-[#221A17] hover:bg-[#2C211D] border border-[#382B25] text-stone-300 hover:text-white px-2.5 py-1 rounded transition cursor-pointer self-start sm:self-auto shrink-0"
+                        onClick={() => setSelectedLogForPrint(log)}
+                        className="text-xs bg-[#221A17] hover:bg-[#2C211D] border border-[#382B25] text-amber-400 hover:text-amber-300 font-semibold px-3 py-1.5 rounded-lg transition cursor-pointer self-start sm:self-auto shrink-0 flex items-center space-x-1"
+                        title={`View official printed document for ${docName}`}
                       >
-                        Details
+                        <span>Details</span>
+                        <ArrowRight className="w-3 h-3" />
                       </button>
-                    )}
+                    </div>
                   </div>
                 );
               })}
@@ -761,6 +765,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           );
         })()}
       </div>
+
+      {selectedLogForPrint && (
+        <PrintableDispatchSheet
+          dispatchLog={selectedLogForPrint}
+          onClose={() => setSelectedLogForPrint(null)}
+          autoPrint={false}
+        />
+      )}
     </div>
   );
 };

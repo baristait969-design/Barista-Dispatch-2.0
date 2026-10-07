@@ -20,8 +20,7 @@ import {
   Lock,
   X,
   MapPin,
-  Edit,
-  Download
+  Edit
 } from 'lucide-react';
 import { InventoryBatch, Outlet, Driver, DispatchLog, DispatchLineItem, Product, UserProfile } from '../types';
 import { INITIAL_PRODUCTS } from '../data/seedData';
@@ -37,7 +36,6 @@ import {
   getDispatchReportNo, 
   getDispatchDocumentName 
 } from '../utils/dispatchNumberUtils';
-import { generateSingleDispatchPDF } from '../utils/pdfExport';
 
 interface FormsViewProps {
   batches: InventoryBatch[];
@@ -46,6 +44,8 @@ interface FormsViewProps {
   dispatchLogs: DispatchLog[];
   products?: Product[];
   usersList?: UserProfile[];
+  initialLogId?: string | null;
+  onClearInitialLogId?: () => void;
 }
 
 export const FormsView: React.FC<FormsViewProps> = ({
@@ -54,7 +54,9 @@ export const FormsView: React.FC<FormsViewProps> = ({
   drivers,
   dispatchLogs,
   products,
-  usersList
+  usersList,
+  initialLogId,
+  onClearInitialLogId
 }) => {
   const { userProfile, hasAccess } = useAuth();
   const { showAlert, showConfirm } = useModal();
@@ -70,6 +72,33 @@ export const FormsView: React.FC<FormsViewProps> = ({
       l => !l.deleted && !(l as any).isDeleted && l.status !== 'deleted' && !l.supersededBy
     );
   }, [dispatchLogs]);
+
+  const [submittedSearchQuery, setSubmittedSearchQuery] = useState<string>('');
+
+  const filteredSubmittedLogs = useMemo(() => {
+    const q = submittedSearchQuery.trim().toLowerCase();
+    if (!q) return activeDispatchLogs;
+
+    return activeDispatchLogs.filter(log => {
+      const docName = (log.documentName || getDispatchDocumentName(log) || '').toLowerCase();
+      const repNo = (log.reportNo || getDispatchReportNo(log) || '').toLowerCase();
+      const prevDoc = (log.previousDocumentName || '').toLowerCase();
+      const date = (log.date || '').toLowerCase();
+      const driver = (log.driverName || '').toLowerCase();
+      const supervisor = (log.supervisor || '').toLowerCase();
+      const outlets = (log.outletNames || []).join(' ').toLowerCase();
+
+      return (
+        docName.includes(q) ||
+        repNo.includes(q) ||
+        prevDoc.includes(q) ||
+        outlets.includes(q) ||
+        driver.includes(q) ||
+        supervisor.includes(q) ||
+        date.includes(q)
+      );
+    });
+  }, [activeDispatchLogs, submittedSearchQuery]);
 
   const [selectedLogForPrint, setSelectedLogForPrint] = useState<DispatchLog | null>(null);
   const [lastSubmittedLog, setLastSubmittedLog] = useState<DispatchLog | null>(null);
@@ -935,6 +964,16 @@ export const FormsView: React.FC<FormsViewProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  useEffect(() => {
+    if (initialLogId && dispatchLogs && dispatchLogs.length > 0) {
+      const targetLog = dispatchLogs.find(l => l.id === initialLogId);
+      if (targetLog) {
+        handleRetrieveForEdit(targetLog);
+      }
+      onClearInitialLogId?.();
+    }
+  }, [initialLogId, dispatchLogs, onClearInitialLogId]);
+
   return (
     <div className="space-y-6">
       {/* Top Banner and Navigation */}
@@ -1059,13 +1098,68 @@ export const FormsView: React.FC<FormsViewProps> = ({
             </button>
           </div>
 
+          {/* Search by Document Number / Details Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-stone-950/80 border border-stone-800 rounded-xl p-2.5 sm:p-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-amber-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={submittedSearchQuery}
+                onChange={(e) => setSubmittedSearchQuery(e.target.value)}
+                placeholder="Search by Document Number (e.g. DSP-0004, Report #), Outlet, Driver..."
+                className="w-full bg-[#181311] border border-stone-800 focus:border-amber-500 rounded-lg pl-9 pr-8 py-2 text-xs text-white placeholder-stone-500 focus:outline-none transition font-sans"
+              />
+              {submittedSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSubmittedSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-white p-0.5 rounded transition cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between sm:justify-end space-x-2 text-xs shrink-0 text-stone-400 px-1">
+              <span className="font-mono text-[11px]">
+                Showing <strong className="text-amber-400">{filteredSubmittedLogs.length}</strong> of {activeDispatchLogs.length} logs
+              </span>
+              {submittedSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSubmittedSearchQuery('')}
+                  className="text-xs text-amber-400 hover:underline cursor-pointer font-medium ml-1"
+                >
+                  Clear filter
+                </button>
+              )}
+            </div>
+          </div>
+
           {activeDispatchLogs.length === 0 ? (
             <div className="py-12 text-center text-stone-500 text-xs">
               No dispatch logs submitted yet.
             </div>
+          ) : filteredSubmittedLogs.length === 0 ? (
+            <div className="py-12 text-center bg-stone-950/40 rounded-xl border border-dashed border-stone-800 p-6 space-y-2">
+              <p className="text-sm font-semibold text-stone-300">
+                No dispatch logs found matching "{submittedSearchQuery}"
+              </p>
+              <p className="text-xs text-stone-500">
+                Please check the document number (e.g. DSP-0004), report number, or outlet name.
+              </p>
+              <button
+                type="button"
+                onClick={() => setSubmittedSearchQuery('')}
+                className="mt-2 px-3 py-1.5 bg-[#251C18] hover:bg-[#312520] border border-[#382B25] text-amber-400 rounded-lg text-xs font-semibold cursor-pointer transition"
+              >
+                Clear Search Filter
+              </button>
+            </div>
           ) : (
             <div className="divide-y divide-stone-800">
-              {activeDispatchLogs.map((log) => {
+              {filteredSubmittedLogs.map((log) => {
                 const docName = log.documentName || getDispatchDocumentName(log);
                 const repNo = log.reportNo || getDispatchReportNo(log);
                 const rev = log.revision || 'Rev 01';
@@ -1125,21 +1219,6 @@ export const FormsView: React.FC<FormsViewProps> = ({
                         <Printer className="w-3.5 h-3.5" />
                         <span>Print Sheet</span>
                       </button>
-                      <button
-                        onClick={() => generateSingleDispatchPDF(log)}
-                        className="px-2.5 py-1.5 bg-stone-800 hover:bg-stone-750 text-emerald-400 border border-stone-700 hover:border-emerald-500/50 rounded-lg text-xs font-medium transition flex items-center space-x-1 cursor-pointer"
-                        title="Download PDF copy"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>PDF</span>
-                      </button>
-                      <span
-                        className="px-2 py-1.5 bg-stone-900 border border-stone-800 text-stone-400 rounded-lg text-[10px] font-mono flex items-center space-x-1 select-none"
-                        title="HACCP Audit Standard: Once submitted, dispatch records are permanent & immutable"
-                      >
-                        <Lock className="w-3 h-3 text-stone-500" />
-                        <span>Immutable</span>
-                      </span>
                     </div>
                   </div>
                 );

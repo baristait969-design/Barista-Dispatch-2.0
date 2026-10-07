@@ -34,6 +34,7 @@ interface ReportsViewProps {
   outlets?: Outlet[];
   drivers?: Driver[];
   usersList?: UserProfile[];
+  onNavigate?: (tab: string, targetId?: string) => void;
 }
 
 export const ReportsView: React.FC<ReportsViewProps> = ({ 
@@ -41,7 +42,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   batches,
   outlets = [],
   drivers = [],
-  usersList = []
+  usersList = [],
+  onNavigate
 }) => {
   const { userProfile, role, hasAccess } = useAuth();
   const { showAlert, showConfirm } = useModal();
@@ -960,12 +962,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end space-x-1.5">
                             <button
-                              onClick={() => generateSingleDispatchPDF(log as any)}
-                              className="px-2.5 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 hover:text-white border border-emerald-800 rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer shadow-sm"
-                              title="Download PDF (.pdf) for this dispatch record"
+                              onClick={() => setSelectedLogForPrint(log)}
+                              className="px-2.5 py-1.5 bg-[#251C18] hover:bg-[#2C211D] text-amber-400 hover:text-amber-300 border border-[#382B25] rounded-lg text-xs font-semibold transition flex items-center space-x-1 cursor-pointer shadow-sm"
+                              title="View official document sheet"
                             >
-                              <Download className="w-3 h-3 text-emerald-400" />
-                              <span>PDF</span>
+                              <span>Details</span>
                             </button>
                             <button
                               onClick={() => setSelectedLogForPrint(log)}
