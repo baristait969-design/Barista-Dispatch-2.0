@@ -43,7 +43,7 @@ export function printHtmlElement(elementId?: string, title?: string) {
     // Dynamic A4 portrait page size injection for strict browser compliance
     const pageStyle = document.createElement('style');
     pageStyle.id = 'dynamic-print-page-style';
-    pageStyle.textContent = `@media print { @page { size: A4 portrait !important; margin: 6mm 8mm 6mm 8mm !important; } }`;
+    pageStyle.textContent = `@media print { @page { size: A4 portrait !important; margin: 8mm 10mm 8mm 10mm !important; } }`;
     document.head.appendChild(pageStyle);
 
     const prevTitle = document.title;

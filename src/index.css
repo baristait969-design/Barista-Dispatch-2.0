@@ -161,7 +161,6 @@ input[type="number"] {
     width: 100% !important;
     max-width: 100% !important;
     height: auto !important;
-    min-height: 0 !important;
     margin: 0 auto !important;
     padding: 0 !important;
     background: #ffffff !important;
@@ -195,10 +194,8 @@ input[type="number"] {
     position: static !important;
     width: 100% !important;
     max-width: 100% !important;
-    min-height: 0 !important;
-    height: auto !important;
     margin: 0 auto !important;
-    padding: 2mm 0 !important;
+    padding: 4mm 6mm !important;
     background: #ffffff !important;
     color: #000000 !important;
     box-shadow: none !important;
@@ -219,22 +216,11 @@ input[type="number"] {
     display: block !important;
   }
 
-  /* Ensure all wrappers are non-clipping for proper pagination */
-  #print-root div {
-    overflow: visible !important;
-  }
-
-  /* Avoid splitting headers, metric cards, and sign-off matrix */
+  /* Avoid unnecessary page breaks and keep table rows intact */
   header,
   .print-avoid-break {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
-  }
-
-  table {
-    page-break-inside: auto !important;
-    break-inside: auto !important;
-    border-collapse: collapse !important;
   }
 
   thead {
@@ -245,18 +231,7 @@ input[type="number"] {
     display: table-footer-group !important;
   }
 
-  tbody {
-    page-break-inside: auto !important;
-    break-inside: auto !important;
-  }
-
   tr {
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid-page !important;
-  }
-
-  td, th {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
@@ -270,6 +245,11 @@ input[type="number"] {
 
   #print-root table.haccp-table,
   #print-root table {
+    border: 2px solid #1c1917 !important;
     border-collapse: collapse !important;
+  }
+  #print-root table.haccp-table th,
+  #print-root table.haccp-table td {
+    border-color: #1c1917 !important;
   }
 }
