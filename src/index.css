@@ -223,12 +223,13 @@ input[type="number"] {
     page-break-inside: avoid !important;
   }
 
+  /* Table headers and footers should only appear once at the start/end of the table and NOT repeat across middle pages */
   thead {
-    display: table-header-group !important;
+    display: table-row-group !important;
   }
 
   tfoot {
-    display: table-footer-group !important;
+    display: table-row-group !important;
   }
 
   tr {
