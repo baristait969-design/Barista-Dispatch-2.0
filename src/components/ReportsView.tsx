@@ -22,9 +22,11 @@ import { DispatchLog, InventoryBatch, Outlet, Driver, UserProfile } from '../typ
 import { PrintableDispatchSheet } from './PrintableDispatchSheet';
 import { PrintableExecutiveReportModal } from './PrintableExecutiveReportModal';
 import { BaristaLogo } from './BaristaLogo';
-import { generateExecutiveReportPDF, generateSingleDispatchPDF } from '../utils/pdfExport';
+import { generateSingleDispatchPDF } from '../utils/pdfExport';
 import { getDispatchReportNo, getDispatchDocumentName } from '../utils/dispatchNumberUtils';
 import { useModal } from '../context/ModalDialogContext';
+import { downloadHtmlElementAsPDF, exportDirectMonthlyExecutiveReportPDF } from '../utils/printUtils';
+import { MonthlyExecutiveReportDocument } from './MonthlyExecutiveReportDocument';
 
 interface ReportsViewProps {
   dispatchLogs: DispatchLog[];
@@ -83,6 +85,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
   const [selectedLogForPrint, setSelectedLogForPrint] = useState<DispatchLog | null>(null);
   const [showExecutiveReportModal, setShowExecutiveReportModal] = useState<boolean>(false);
+  const [isExportingPDF, setIsExportingPDF] = useState<boolean>(false);
 
   const formatMonthLabel = (mStr: string) => {
     if (!mStr || mStr === 'all') return 'All Historical Records';
@@ -343,7 +346,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     document.body.removeChild(link);
   };
 
-  const handleDownloadExecutivePDF = () => {
+  const handleDownloadExecutivePDF = async () => {
     if (filteredLogs.length === 0) {
       showAlert('No dispatch records available for the selected filters to generate PDF.', {
         title: 'Empty Report Dataset',
@@ -351,20 +354,52 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       });
       return;
     }
-    generateExecutiveReportPDF(
-      filteredLogs,
-      {
-        totalDispatches,
-        totalUnitsDispatched,
-        haccpComplianceRate,
-        averageTemp,
-        compliantLogsCount,
-        deviationCount,
-        outletsCount: outletStats.length
-      },
-      userProfile?.displayName || userProfile?.email || 'Central Kitchen QA Executive',
-      datePreset === 'today' ? `Today (${todayStr})` : datePreset === '7days' ? 'Last 7 Days' : datePreset === '30days' ? 'Last 30 Days' : 'Full Historical Dataset'
-    );
+
+    if (isExportingPDF) return;
+
+    setIsExportingPDF(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const success = await downloadHtmlElementAsPDF(
+        'printable-executive-report-content-direct',
+        `Barista_Monthly_Dispatch_Report_${today}.pdf`,
+        'portrait'
+      );
+      if (!success) {
+        await exportDirectMonthlyExecutiveReportPDF(
+          filteredLogs,
+          {
+            totalDispatches,
+            totalUnitsDispatched,
+            haccpComplianceRate,
+            averageTemp,
+            compliantLogsCount,
+            deviationCount,
+            outletsCount: outletStats.length
+          },
+          userProfile?.displayName || userProfile?.email || 'Barista IT Administrator',
+          selectedMonth === 'all' ? 'All Historical Records' : formatMonthLabel(selectedMonth)
+        );
+      }
+    } catch (err) {
+      console.error('Direct monthly PDF download error:', err);
+      await exportDirectMonthlyExecutiveReportPDF(
+        filteredLogs,
+        {
+          totalDispatches,
+          totalUnitsDispatched,
+          haccpComplianceRate,
+          averageTemp,
+          compliantLogsCount,
+          deviationCount,
+          outletsCount: outletStats.length
+        },
+        userProfile?.displayName || userProfile?.email || 'Barista IT Administrator',
+        selectedMonth === 'all' ? 'All Historical Records' : formatMonthLabel(selectedMonth)
+      );
+    } finally {
+      setIsExportingPDF(false);
+    }
   };
 
   const handlePrintExecutiveReport = () => {
@@ -409,11 +444,42 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             deviationCount,
             outletsCount: outletStats.length
           }}
-          generatedBy={userProfile?.displayName || userProfile?.email || 'Central Kitchen QA Executive'}
+          generatedBy={userProfile?.displayName || userProfile?.email || 'Barista IT Administrator'}
           filterPeriod={selectedMonth === 'all' ? 'All Historical Records' : formatMonthLabel(selectedMonth)}
+          autoDownload={false}
           onClose={() => setShowExecutiveReportModal(false)}
         />
       )}
+
+      {/* Offscreen 1-to-1 exact A4 target for direct downloads with 100% printed-parity */}
+      <div 
+        style={{ 
+          position: 'fixed', 
+          left: '-9999px', 
+          top: '0', 
+          width: '794px', 
+          zIndex: -9999, 
+          pointerEvents: 'none' 
+        }}
+        aria-hidden="true"
+        className="print:hidden"
+      >
+        <MonthlyExecutiveReportDocument
+          logs={filteredLogs}
+          stats={{
+            totalDispatches,
+            totalUnitsDispatched,
+            haccpComplianceRate,
+            averageTemp,
+            compliantLogsCount,
+            deviationCount,
+            outletsCount: outletStats.length
+          }}
+          generatedBy={userProfile?.displayName || userProfile?.email || 'Barista IT Administrator'}
+          filterPeriod={selectedMonth === 'all' ? 'All Historical Records' : formatMonthLabel(selectedMonth)}
+          id="printable-executive-report-content-direct"
+        />
+      </div>
 
       {/* TOP BANNER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#171311] border border-[#2E221E] rounded-2xl p-5 print:hidden shadow-md">
@@ -422,9 +488,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             <BaristaLogo className="w-8 h-8 ring-2 ring-[#ED5338]/40 shadow-md shrink-0" />
             <div>
               <div className="flex items-center space-x-2">
-                <h2 className="text-xl sm:text-2xl font-bold text-white tracking-wide">Central Kitchen Reports & QA Audits</h2>
+                <h2 className="text-xl sm:text-2xl font-bold text-white tracking-wide">Central Kitchen Reports & Dispatch Logs</h2>
                 <span className="text-[10px] bg-[#ED5338]/15 text-[#FFA594] border border-[#ED5338]/30 px-2 py-0.5 rounded font-mono font-bold">
-                  OPRP-2 Certified
+                  Monthly Logs
                 </span>
                 <span className="inline-flex items-center space-x-1 text-[10px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-mono font-bold">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -432,7 +498,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 </span>
               </div>
               <p className="text-xs text-stone-400 mt-0.5">
-                Real-time bakery dispatch analytics, cold-chain compliance (&lt;= 5.0 C), retail outlet volumes, and item performance.
+                Real-time bakery dispatch analytics, retail outlet volumes, item performance, and monthly delivery logs.
               </p>
             </div>
           </div>
@@ -440,16 +506,30 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleDownloadExecutivePDF}
-            className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs transition flex items-center space-x-1.5 cursor-pointer shadow-md"
-            title="Download Executive QA & Dispatch Report in PDF format (.pdf)"
+            disabled={isExportingPDF}
+            className={`px-3.5 py-2 font-bold rounded-xl text-xs transition flex items-center space-x-1.5 cursor-pointer shadow-md ${
+              isExportingPDF
+                ? 'bg-amber-600 hover:bg-amber-500 text-white cursor-wait ring-2 ring-amber-400 shadow-amber-600/30'
+                : 'bg-emerald-700 hover:bg-emerald-600 text-white shadow-emerald-900/30'
+            }`}
+            title="Download Monthly Dispatch Summary directly in PDF format (.pdf)"
           >
-            <Download className="w-4 h-4" />
-            <span>Download PDF (.pdf)</span>
+            {isExportingPDF ? (
+              <>
+                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span className="tracking-wide">Downloading PDF...</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                <span>Download PDF (.pdf)</span>
+              </>
+            )}
           </button>
           <button
             onClick={handlePrintExecutiveReport}
             className="px-3.5 py-2 bg-[#ED5338] hover:bg-[#D84228] text-white font-bold rounded-xl text-xs shadow-md shadow-[#ED5338]/20 transition flex items-center space-x-1.5 cursor-pointer"
-            title="Print Executive QA & Dispatch Summary Sheet"
+            title="Print Monthly Dispatch Summary Sheet"
           >
             <Printer className="w-4 h-4" />
             <span>Print Report</span>

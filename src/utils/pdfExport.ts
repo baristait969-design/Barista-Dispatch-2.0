@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { DispatchLog } from '../types';
 import { getDispatchReportNo, getDispatchDocumentName } from './dispatchNumberUtils';
-import { downloadHtmlElementAsPDF, renderDispatchSheetHtml } from './printUtils';
+import { downloadHtmlElementAsPDF, renderDispatchSheetHtml, renderMonthlyExecutiveReportHtml } from './printUtils';
 
 export interface PdfHeaderConfig {
   title: string;
@@ -14,6 +14,8 @@ export interface PdfHeaderConfig {
   approvedBy: string;
   refId: string;
   haccpLink?: string;
+  hideHaccpLink?: boolean;
+  systemCategory?: string;
   mandateNotice?: string;
   showMandateNotice?: boolean;
 }
@@ -84,29 +86,31 @@ export function drawHaccpHeaderToPdf(
   doc.setTextColor(110, 100, 95);
   doc.text('Barista Coffee Lanka (Pvt) Ltd.', col1CenterX, startY + (isLandscape ? 22.0 : 25.0), { align: 'center' });
 
-  // COLUMN 2: Title & HACCP
+  // COLUMN 2: Title & Category
   const col2CenterX = startX + col1Width + col2Width / 2;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(isLandscape ? 5.5 : 6.0);
   doc.setTextColor(100, 95, 90);
-  doc.text('HACCP FOOD SAFETY MANAGEMENT SYSTEM', col2CenterX, startY + (isLandscape ? 5.5 : 6.5), { align: 'center' });
+  doc.text((config.systemCategory || 'CENTRAL KITCHEN LOGISTICS & DISPATCH OPERATIONS').toUpperCase(), col2CenterX, startY + (isLandscape ? 5.5 : 6.5), { align: 'center' });
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(isLandscape ? 9.5 : 10.5);
   doc.setTextColor(20, 20, 20);
   doc.text(config.title.toUpperCase(), col2CenterX, startY + (isLandscape ? 11.0 : 13.0), { align: 'center' });
 
-  const badgeWidth = Math.min(col2Width - 16, 68);
-  const badgeHeight = isLandscape ? 4.5 : 4.8;
-  const badgeY = startY + (isLandscape ? 13.5 : 15.5);
-  doc.setFillColor(254, 242, 240);
-  doc.setDrawColor(237, 83, 56);
-  doc.setLineWidth(0.2);
-  doc.roundedRect(col2CenterX - badgeWidth / 2, badgeY, badgeWidth, badgeHeight, 1, 1, 'FD');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(isLandscape ? 5.8 : 6.3);
-  doc.setTextColor(216, 66, 40);
-  doc.text(config.haccpLink || 'OPRP-2 (Cold-Chain <= 5.0 C)', col2CenterX, badgeY + (isLandscape ? 3.2 : 3.4), { align: 'center' });
+  if (!config.hideHaccpLink && config.haccpLink) {
+    const badgeWidth = Math.min(col2Width - 16, 68);
+    const badgeHeight = isLandscape ? 4.5 : 4.8;
+    const badgeY = startY + (isLandscape ? 13.5 : 15.5);
+    doc.setFillColor(254, 242, 240);
+    doc.setDrawColor(237, 83, 56);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(col2CenterX - badgeWidth / 2, badgeY, badgeWidth, badgeHeight, 1, 1, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(isLandscape ? 5.8 : 6.3);
+    doc.setTextColor(216, 66, 40);
+    doc.text(config.haccpLink || 'OPRP-2 (Cold-Chain <= 5.0 C)', col2CenterX, badgeY + (isLandscape ? 3.2 : 3.4), { align: 'center' });
+  }
 
   if (config.subtitle) {
     doc.setFont('helvetica', 'normal');
@@ -208,9 +212,9 @@ export function buildExecutiveReportDoc(
     format: 'a4'
   });
 
-  const startX = 18;
+  const startX = 14;
   const startY = 8;
-  const totalWidth = 267;
+  const totalWidth = 269;
 
   const nextY = drawHaccpHeaderToPdf(
     doc,
@@ -218,158 +222,186 @@ export function buildExecutiveReportDoc(
     startY,
     totalWidth,
     {
-      title: 'Executive QA & Dispatch Summary',
-      subtitle: 'Central Kitchen Food Safety & Cold-Chain Adherence Audit',
-      docCode: 'BCL/QA/REP/EXEC',
+      title: 'Monthly Dispatch Log & Summary',
+      subtitle: 'Central Kitchen Production & Retail Logistics Report',
+      docCode: 'BCL/REP/DISP/01',
+      systemCategory: 'Central Kitchen Logistics & Dispatch Operations',
+      hideHaccpLink: true,
       effectiveDate: dateRange,
       revision: 'Rev 01',
       version: '01',
       approvedBy: userName,
-      refId: `AUD-${stats.totalDispatches}-REC`,
-      haccpLink: 'OPRP-2 Certified (<= 5.0 C)'
+      refId: `DSP-${stats.totalDispatches}-SUM`
     },
     true
   );
 
   const kpiY = nextY;
-  const kpiH = 15;
-  doc.setFillColor(246, 246, 248);
+  const kpiH = 14;
+  doc.setFillColor(248, 248, 250);
   doc.rect(startX, kpiY, totalWidth, kpiH, 'F');
-  doc.setDrawColor(210, 210, 215);
-  doc.setLineWidth(0.3);
+  doc.setDrawColor(25, 20, 18);
+  doc.setLineWidth(0.4);
   doc.rect(startX, kpiY, totalWidth, kpiH, 'S');
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.setTextColor(80, 80, 80);
-  doc.text('TOTAL DISPATCHES', 20, kpiY + 5);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.setTextColor(20, 20, 20);
-  doc.text(String(stats.totalDispatches), 20, kpiY + 11.5);
+  const kpiColW = totalWidth / 5;
+  for (let i = 1; i < 5; i++) {
+    doc.line(startX + kpiColW * i, kpiY, startX + kpiColW * i, kpiY + kpiH);
+  }
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
+  doc.setFontSize(6.0);
   doc.setTextColor(80, 80, 80);
-  doc.text('TOTAL OUTPUT', 65, kpiY + 5);
+  doc.text('TOTAL DISPATCHES', startX + kpiColW * 0.5, kpiY + 4.5, { align: 'center' });
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
+  doc.setFontSize(10.5);
   doc.setTextColor(20, 20, 20);
-  doc.text(`${stats.totalUnitsDispatched} Units`, 65, kpiY + 11.5);
+  doc.text(`${stats.totalDispatches} Trips`, startX + kpiColW * 0.5, kpiY + 10.5, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
+  doc.setFontSize(6.0);
   doc.setTextColor(80, 80, 80);
-  doc.text('COLD-CHAIN ADHERENCE', 120, kpiY + 5);
+  doc.text('TOTAL OUTPUT', startX + kpiColW * 1.5, kpiY + 4.5, { align: 'center' });
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.setTextColor(stats.haccpComplianceRate >= 95 ? 16 : 180, stats.haccpComplianceRate >= 95 ? 140 : 80, 50);
-  doc.text(`${stats.haccpComplianceRate}% (OPRP-2)`, 120, kpiY + 11.5);
+  doc.setFontSize(10.5);
+  doc.setTextColor(20, 20, 20);
+  doc.text(`${stats.totalUnitsDispatched} Units`, startX + kpiColW * 1.5, kpiY + 10.5, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
+  doc.setFontSize(6.0);
   doc.setTextColor(80, 80, 80);
-  doc.text('AVG DISPATCH TEMP', 190, kpiY + 5);
+  doc.text('ACTIVE OUTLETS', startX + kpiColW * 2.5, kpiY + 4.5, { align: 'center' });
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
+  doc.setFontSize(10.5);
   doc.setTextColor(20, 20, 20);
-  doc.text(`${stats.averageTemp} C`, 190, kpiY + 11.5);
+  doc.text(`${stats.outletsCount} Branches`, startX + kpiColW * 2.5, kpiY + 10.5, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
+  doc.setFontSize(6.0);
   doc.setTextColor(80, 80, 80);
-  doc.text('ACTIVE OUTLETS', 245, kpiY + 5);
+  doc.text('AVG DISPATCH TEMP', startX + kpiColW * 3.5, kpiY + 4.5, { align: 'center' });
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
+  doc.setFontSize(10.5);
   doc.setTextColor(20, 20, 20);
-  doc.text(String(stats.outletsCount), 245, kpiY + 11.5);
+  doc.text(`${stats.averageTemp} °C`, startX + kpiColW * 3.5, kpiY + 10.5, { align: 'center' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.0);
+  doc.setTextColor(80, 80, 80);
+  doc.text('REPORTING PERIOD', startX + kpiColW * 4.5, kpiY + 4.5, { align: 'center' });
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(20, 20, 20);
+  doc.text(dateRange, startX + kpiColW * 4.5, kpiY + 10.2, { align: 'center' });
 
   const tableRows: any[] = [];
-  logs.forEach(log => {
-    const totalUnits = log.items.reduce((s, i) => s + i.quantity, 0);
-    const isCompliant = log.items.every(i => i.dispatchTemp <= 5.0);
-    const itemSummary = log.items.filter(i => i.quantity > 0).map(i => `${i.productName} (${i.quantity})`).join(', ');
+  logs.forEach((log, idx) => {
+    const rawDoc = log.documentName || log.reportNo || log.docNo || `DSP-${String(idx + 1).padStart(4, '0')}`;
+    const docName = String(rawDoc)
+      .replace(/[-_/\s]*\(?\d{4}[-/.]\d{2}[-/.]\d{2}\)?.*$/i, '')
+      .trim() || `DSP-${String(idx + 1).padStart(4, '0')}`;
+    const activeItems = (log.items || []).filter(i => (i.quantity || 0) > 0);
+    const temps = activeItems.map(i => i.dispatchTemp);
+    const avgTemp = temps.length > 0 ? (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1) : '3.5';
+
+    // Aggregate quantities per unique product name
+    const aggregatedMap = new Map<string, { productName: string; quantity: number; unit: string }>();
+    activeItems.forEach(item => {
+      const normName = item.productName.trim();
+      const existing = aggregatedMap.get(normName);
+      if (existing) {
+        existing.quantity += (item.quantity || 0);
+      } else {
+        aggregatedMap.set(normName, {
+          productName: item.productName,
+          quantity: item.quantity || 0,
+          unit: (item as any).unit || 'Units'
+        });
+      }
+    });
+    const aggregatedItems = Array.from(aggregatedMap.values());
+
+    // Format products ONE BY ONE VERTICALLY (names only)
+    const formattedProducts = aggregatedItems.map(i => i.productName).join('\n');
+    const formattedOutputs = aggregatedItems.map(i => `${i.quantity} ${i.unit}`).join('\n');
+
     tableRows.push([
-      log.docNo,
-      `${log.date} ${log.dispatchTime}`,
+      idx + 1,
+      docName,
       log.outletNames.join(', '),
       log.driverName,
       log.supervisor,
-      `${log.items.filter(i => i.quantity > 0).length} items (${totalUnits} units)`,
-      itemSummary || 'None',
-      isCompliant ? 'PASS (<=5 C)' : 'DEV (>5 C)'
+      formattedProducts || 'None',
+      formattedOutputs || '0 Units',
+      `${avgTemp} °C`
     ]);
   });
 
   autoTable(doc, {
     startY: kpiY + kpiH + 4,
-    head: [['Doc No', 'Date / Time', 'Destination Outlets', 'Driver', 'QA Supervisor', 'Output', 'Product Breakdown', 'HACCP']],
+    head: [['#', 'Document No', 'Destination Outlet', 'Dispatch Driver', 'Supervisor', 'Product Breakdown', 'Output', 'Dispatch Temp']],
     body: tableRows,
     theme: 'grid',
     headStyles: {
-      fillColor: [35, 32, 29],
+      fillColor: [25, 20, 18],
       textColor: [255, 255, 255],
       fontStyle: 'bold',
-      fontSize: 8,
-      halign: 'left'
+      fontSize: 7.5,
+      halign: 'center',
+      lineWidth: 0.3,
+      lineColor: [25, 20, 18]
     },
     bodyStyles: {
-      fontSize: 7.5,
-      textColor: [40, 40, 40]
+      fontSize: 7.0,
+      textColor: [25, 20, 18],
+      lineWidth: 0.25,
+      lineColor: [210, 210, 215],
+      cellPadding: 2.5
     },
     columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 26 },
-      1: { cellWidth: 26 },
-      2: { cellWidth: 42 },
-      3: { cellWidth: 30 },
-      4: { cellWidth: 30 },
-      5: { cellWidth: 28 },
-      6: { cellWidth: 62 },
-      7: { fontStyle: 'bold', cellWidth: 25, halign: 'center' }
+      0: { fontStyle: 'bold', cellWidth: 8, halign: 'center' },
+      1: { cellWidth: 28, fontStyle: 'bold', halign: 'center' },
+      2: { cellWidth: 36, fontStyle: 'bold', halign: 'center' },
+      3: { cellWidth: 30, halign: 'center' },
+      4: { cellWidth: 28, halign: 'center' },
+      5: { cellWidth: 95, halign: 'left' },
+      6: { cellWidth: 24, halign: 'center', fontStyle: 'bold' },
+      7: { cellWidth: 20, halign: 'center', fontStyle: 'bold' }
     },
-    didParseCell: function(data) {
-      if (data.section === 'body' && data.column.index === 7) {
-        if (data.cell.raw === 'PASS (<=5 C)') {
-          data.cell.styles.textColor = [16, 120, 50];
-        } else {
-          data.cell.styles.textColor = [180, 20, 20];
-        }
-      }
-    },
-    margin: { left: startX, right: 12, bottom: 20 }
+    margin: { left: startX, right: 14, bottom: 22 }
   });
 
   const lastTableFinalY = (doc as any).lastAutoTable?.finalY || 140;
-  let execSignY = lastTableFinalY + 6;
-  if (execSignY + 26 > 195) {
+  let execSignY = lastTableFinalY + 5;
+  if (execSignY + 24 > 195) {
     doc.addPage();
-    execSignY = 16;
+    execSignY = 14;
   }
 
-  doc.setDrawColor(30, 25, 22);
-  doc.setLineWidth(0.35);
+  doc.setDrawColor(25, 20, 18);
+  doc.setLineWidth(0.4);
   doc.rect(startX, execSignY, totalWidth, 22, 'S');
 
-  doc.setFillColor(35, 32, 29);
-  doc.rect(startX, execSignY, totalWidth, 4.2, 'F');
+  doc.setFillColor(25, 20, 18);
+  doc.rect(startX, execSignY, totalWidth, 4.5, 'F');
   doc.setFontSize(6.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(255, 255, 255);
-  doc.text('EXECUTIVE QA SIGN-OFF & CONTROLLED AUDIT CERTIFICATION', startX + 4, execSignY + 3.0);
+  doc.text('EXECUTIVE DISPATCH & OPERATIONS SIGN-OFF', startX + 4, execSignY + 3.2);
 
   const colW = totalWidth / 3;
   doc.setDrawColor(200, 200, 205);
   doc.setLineWidth(0.25);
-  doc.line(startX + colW, execSignY + 4.2, startX + colW, execSignY + 22);
-  doc.line(startX + colW * 2, execSignY + 4.2, startX + colW * 2, execSignY + 22);
+  doc.line(startX + colW, execSignY + 4.5, startX + colW, execSignY + 22);
+  doc.line(startX + colW * 2, execSignY + 4.5, startX + colW * 2, execSignY + 22);
 
   doc.setFontSize(6.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(80, 80, 80);
-  doc.text('1. Central Kitchen QA Supervisor', startX + 4, execSignY + 8.0);
+  doc.text('1. Central Kitchen Dispatch Supervisor', startX + 4, execSignY + 8.2);
   doc.setFontSize(7.5);
   doc.setTextColor(20, 20, 20);
-  doc.text(userName || 'QA Executive', startX + 4, execSignY + 12.5);
+  doc.text(userName || 'Barista IT Administrator', startX + 4, execSignY + 12.5);
   doc.setFontSize(6.2);
   doc.setTextColor(100, 100, 100);
   doc.setFont('helvetica', 'normal');
@@ -378,7 +410,7 @@ export function buildExecutiveReportDoc(
   doc.setFontSize(6.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(80, 80, 80);
-  doc.text('2. Central Kitchen Manager', startX + colW + 4, execSignY + 8.0);
+  doc.text('2. Central Kitchen Manager', startX + colW + 4, execSignY + 8.2);
   doc.setFontSize(7.5);
   doc.setTextColor(20, 20, 20);
   doc.text('Head of Production', startX + colW + 4, execSignY + 12.5);
@@ -390,22 +422,22 @@ export function buildExecutiveReportDoc(
   doc.setFontSize(6.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(80, 80, 80);
-  doc.text('3. Quality Assurance Executive', startX + colW * 2 + 4, execSignY + 8.0);
+  doc.text('3. Quality Assurance & Logistics Executive', startX + colW * 2 + 4, execSignY + 8.2);
   doc.setFontSize(7.5);
   doc.setTextColor(20, 20, 20);
-  doc.text('Lead HACCP Auditor', startX + colW * 2 + 4, execSignY + 12.5);
+  doc.text('QA Executive', startX + colW * 2 + 4, execSignY + 12.5);
   doc.setFontSize(6.2);
   doc.setTextColor(100, 100, 100);
   doc.setFont('helvetica', 'normal');
-  doc.text('QA Auditor Signature: _______________________', startX + colW * 2 + 4, execSignY + 18.5);
+  doc.text('QA Signature: _______________________', startX + colW * 2 + 4, execSignY + 18.5);
 
   const pageCount = (doc as any).internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-    doc.setFontSize(7);
+    doc.setFontSize(6.8);
     doc.setTextColor(120, 120, 120);
     doc.text(
-      `Barista Coffee Lanka (Pvt) Ltd. - Doc: BCL/QA/REP/EXEC - Official HACCP Audit Record - Page ${i} of ${pageCount}`,
+      `Barista Coffee Lanka (Pvt) Ltd. - Central Kitchen Monthly Dispatch Summary & Audit Record - Page ${i} of ${pageCount}`,
       startX,
       202
     );
@@ -417,24 +449,51 @@ export function buildExecutiveReportDoc(
 export async function generateExecutiveReportPDF(
   logs: DispatchLog[],
   stats: any,
-  userName: string = 'QA Executive',
-  dateRange: string = 'All Records'
+  userName: string = 'Barista IT Administrator',
+  dateRange: string = 'Current Month Cycle'
 ) {
   const todayStr = new Date().toISOString().split('T')[0];
-  const filename = `Barista_Executive_Dispatch_Report_${todayStr}.pdf`;
+  const filename = `Barista_Monthly_Dispatch_Report_${todayStr}.pdf`;
 
-  // 1. If currently rendered on screen, capture directly to ensure exact match with printed version:
-  const screenContent = typeof document !== 'undefined' ? document.getElementById('printable-executive-report-content') : null;
+  // 1. If currently rendered on screen or in background export mount, capture directly:
+  const screenContent = typeof document !== 'undefined' 
+    ? (document.getElementById('printable-executive-report-content') || document.getElementById('printable-executive-report-export-content') || document.getElementById('printable-executive-report-content-direct'))
+    : null;
   if (screenContent) {
     try {
-      await downloadHtmlElementAsPDF(screenContent, filename, 'landscape');
-      return;
+      const success = await downloadHtmlElementAsPDF(screenContent, filename, 'portrait');
+      if (success) return;
     } catch (e) {
       console.warn('Failed capturing screen executive report, using fallback:', e);
     }
   }
 
-  // 2. Fallback to jsPDF
+  // 2. If off-screen, create the exact HTML element on-screen behind root for 100% parity
+  if (typeof document !== 'undefined') {
+    const tempDiv = document.createElement('div');
+    tempDiv.id = 'temp-monthly-report-print';
+    tempDiv.style.position = 'fixed';
+    tempDiv.style.left = '-9999px';
+    tempDiv.style.top = '0';
+    tempDiv.style.zIndex = '-9999';
+    tempDiv.style.width = '794px';
+    tempDiv.style.pointerEvents = 'none';
+    tempDiv.style.backgroundColor = '#ffffff';
+    tempDiv.innerHTML = renderMonthlyExecutiveReportHtml(logs, stats, userName, dateRange);
+    document.body.appendChild(tempDiv);
+    try {
+      const success = await downloadHtmlElementAsPDF(tempDiv, filename, 'portrait');
+      if (success) return;
+    } catch (e) {
+      console.warn('Failed capturing offscreen HTML executive report, falling back to jsPDF:', e);
+    } finally {
+      if (document.body.contains(tempDiv)) {
+        document.body.removeChild(tempDiv);
+      }
+    }
+  }
+
+  // 3. Fallback to jsPDF
   const doc = buildExecutiveReportDoc(logs, stats, userName, dateRange);
   doc.save(filename);
 }

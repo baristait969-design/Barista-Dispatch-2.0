@@ -131,7 +131,7 @@ input[type="number"] {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 8mm 10mm 8mm 14mm; /* Outer page boundaries: 14mm left for hole-punching */
+    margin: 8mm 10mm 8mm 10mm;
   }
 
   html, body {
@@ -216,11 +216,22 @@ input[type="number"] {
     display: block !important;
   }
 
-  /* Avoid unnecessary page breaks */
+  /* Avoid unnecessary page breaks and keep table rows intact */
   header,
-  table,
-  tr,
   .print-avoid-break {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  tr {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }

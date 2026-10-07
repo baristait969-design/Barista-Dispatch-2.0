@@ -11,39 +11,49 @@ export const BaristaLogo: React.FC<BaristaLogoProps> = ({
   size,
   variant = 'circle'
 }) => {
+  const dimension = size || (className.includes('w-13') ? 52 : className.includes('w-10') ? 40 : 36);
+
   return (
     <div 
-      className={`relative inline-flex items-center justify-center shrink-0 rounded-full shadow-md overflow-hidden bg-[#EF6340] transition-transform hover:scale-105 ${className}`}
-      style={size ? { width: size, height: size } : undefined}
+      className={`relative inline-flex items-center justify-center shrink-0 rounded-full overflow-hidden bg-[#EF6340] ${className}`}
+      style={{
+        width: size ? `${size}px` : undefined,
+        height: size ? `${size}px` : undefined,
+        backgroundColor: '#EF6340',
+        borderRadius: '50%',
+        boxSizing: 'border-box'
+      }}
       title="Barista Coffee Lanka"
     >
       <svg
         viewBox="0 0 1000 1000"
-        className="w-full h-full"
+        className="w-full h-full block"
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
+        style={{ width: '100%', height: '100%', display: 'block' }}
       >
         {/* Coral Orange Circular Base (#EF6340) */}
         <circle cx="500" cy="500" r="500" fill="#EF6340"/>
         
-        {/* BARISTA wordmark */}
+        {/* BARISTA wordmark - Centered with optimal font geometry */}
         <text
           x="500"
-          y="672"
+          y="560"
           textAnchor="middle"
-          textLength="780"
-          lengthAdjust="spacingAndGlyphs"
-          fontFamily="Arial Narrow, Liberation Sans Narrow, Impact, sans-serif"
-          fontSize="345"
-          fontWeight="700"
+          dominantBaseline="central"
+          fontFamily="Arial, Helvetica, sans-serif"
+          fontSize="240"
+          fontWeight="900"
+          letterSpacing="12"
           fill="#FFFFFF"
         >
           BARISTA
         </text>
 
-        {/* Brown underline beneath the I/S (#641B0B) */}
-        <rect x="502" y="640" width="150" height="32" rx="1" fill="#641B0B"/>
+        {/* Brown underline beneath wordmark (#641B0B) */}
+        <rect x="420" y="660" width="160" height="24" rx="4" fill="#641B0B"/>
       </svg>
     </div>
   );
 };
+

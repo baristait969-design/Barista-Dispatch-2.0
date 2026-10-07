@@ -5,7 +5,21 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      {
+        name: 'html2canvas-modern-color-fix',
+        transform(code, id) {
+          if (id.includes('html2canvas')) {
+            return code.replace(
+              /if\s*\(\s*typeof colorFunction === ['"]undefined['"]\s*\)\s*(?:\{\s*)?throw new Error\([^;]+\);(?:\s*\})?/g,
+              'if (typeof colorFunction === "undefined") return 0x000000ff;'
+            );
+          }
+        }
+      }
+    ],
     resolve: {
       alias: {
         '@': path.resolve('.'),
