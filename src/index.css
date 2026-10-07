@@ -131,7 +131,7 @@ input[type="number"] {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 6mm 8mm 6mm 8mm;
+    margin: 8mm 10mm 8mm 10mm;
   }
 
   html, body {
@@ -190,15 +190,15 @@ input[type="number"] {
     inset: auto !important;
   }
 
-  /* Document body: zero outer padding in print so it perfectly fills exact page without overflow */
+  /* Document body: retains balanced inner padding and rounded elegance */
   #print-root .print-content {
     position: static !important;
     width: 100% !important;
     max-width: 100% !important;
-    margin: 0 auto !important;
-    padding: 0 !important;
-    height: auto !important;
     min-height: 0 !important;
+    height: auto !important;
+    margin: 0 auto !important;
+    padding: 2mm 0 !important;
     background: #ffffff !important;
     color: #000000 !important;
     box-shadow: none !important;
@@ -219,55 +219,44 @@ input[type="number"] {
     display: block !important;
   }
 
-  /* Avoid unnecessary page breaks and keep table rows intact */
+  /* Ensure all wrappers are non-clipping for proper pagination */
+  #print-root div {
+    overflow: visible !important;
+  }
+
+  /* Avoid splitting headers, metric cards, and sign-off matrix */
   header,
   .print-avoid-break {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
 
-  #print-root div,
-  #print-root .overflow-hidden,
-  #print-root .overflow-x-auto {
-    overflow: visible !important;
+  table {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+    border-collapse: collapse !important;
   }
 
-  table,
-  #print-root table {
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  tbody {
     page-break-inside: auto !important;
     break-inside: auto !important;
   }
 
-  thead,
-  #print-root thead {
-    display: table-header-group !important;
+  tr {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
+    break-inside: avoid-page !important;
   }
 
-  tfoot,
-  #print-root tfoot {
-    display: table-footer-group !important;
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
-  }
-
-  tbody,
-  #print-root tbody {
-    break-inside: auto !important;
-  }
-
-  tr,
-  #print-root tr {
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
-    break-after: auto !important;
-  }
-
-  td,
-  th,
-  #print-root td,
-  #print-root th {
+  td, th {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
@@ -281,11 +270,6 @@ input[type="number"] {
 
   #print-root table.haccp-table,
   #print-root table {
-    border: 2px solid #1c1917 !important;
     border-collapse: collapse !important;
-  }
-  #print-root table.haccp-table th,
-  #print-root table.haccp-table td {
-    border-color: #1c1917 !important;
   }
 }
