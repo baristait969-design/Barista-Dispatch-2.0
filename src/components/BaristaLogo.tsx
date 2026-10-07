@@ -11,8 +11,6 @@ export const BaristaLogo: React.FC<BaristaLogoProps> = ({
   size,
   variant = 'circle'
 }) => {
-  const dimension = size || (className.includes('w-13') ? 52 : className.includes('w-10') ? 40 : 36);
-
   return (
     <div 
       className={`relative inline-flex items-center justify-center shrink-0 rounded-full overflow-hidden bg-[#EF6340] ${className}`}
@@ -38,20 +36,20 @@ export const BaristaLogo: React.FC<BaristaLogoProps> = ({
         {/* BARISTA wordmark - Centered with optimal font geometry */}
         <text
           x="500"
-          y="560"
+          y="595"
           textAnchor="middle"
-          dominantBaseline="central"
-          fontFamily="Arial, Helvetica, sans-serif"
-          fontSize="240"
-          fontWeight="900"
-          letterSpacing="12"
+          textLength="780"
+          lengthAdjust="spacingAndGlyphs"
+          fontFamily="'Arial Narrow', 'Liberation Sans Narrow', 'Impact', sans-serif"
+          fontSize="340"
+          fontWeight="700"
           fill="#FFFFFF"
         >
           BARISTA
         </text>
 
         {/* Brown underline beneath wordmark (#641B0B) */}
-        <rect x="420" y="660" width="160" height="24" rx="4" fill="#641B0B"/>
+        <rect x="502" y="630" width="150" height="32" rx="2" fill="#641B0B"/>
       </svg>
     </div>
   );

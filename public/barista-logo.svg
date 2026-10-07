@@ -3,13 +3,13 @@
   <circle cx="500" cy="500" r="500" fill="#EF6340"/>
   <text
     x="500"
-    y="672"
+    y="595"
     text-anchor="middle"
     textLength="780"
     lengthAdjust="spacingAndGlyphs"
     font-family="Arial Narrow, Liberation Sans Narrow, Impact, sans-serif"
-    font-size="345"
+    font-size="340"
     font-weight="700"
     fill="#FFFFFF">BARISTA</text>
-  <rect x="502" y="640" width="150" height="32" rx="1" fill="#641B0B"/>
+  <rect x="502" y="630" width="150" height="32" rx="2" fill="#641B0B"/>
 </svg>

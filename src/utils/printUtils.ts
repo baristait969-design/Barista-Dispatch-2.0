@@ -283,8 +283,8 @@ export function renderDispatchSheetHtml(log: any): string {
               <div style="width: 48px; height: 48px; border-radius: 50%; background: #EF6340; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">
                 <svg viewBox="0 0 1000 1000" style="width: 44px; height: 44px;" fill="none">
                   <circle cx="500" cy="500" r="500" fill="#EF6340"/>
-                  <text x="500" y="672" text-anchor="middle" textLength="780" lengthAdjust="spacingAndGlyphs" font-family="Arial Narrow, sans-serif" font-size="345" font-weight="700" fill="#FFFFFF">BARISTA</text>
-                  <rect x="502" y="640" width="150" height="32" rx="1" fill="#641B0B"/>
+                  <text x="500" y="595" text-anchor="middle" textLength="780" lengthAdjust="spacingAndGlyphs" font-family="'Arial Narrow', 'Liberation Sans Narrow', 'Impact', sans-serif" font-size="340" font-weight="700" fill="#FFFFFF">BARISTA</text>
+                  <rect x="502" y="630" width="150" height="32" rx="2" fill="#641B0B"/>
                 </svg>
               </div>
               <div style="font-family: serif; font-weight: 900; letter-spacing: 2px; font-size: 18px; color: #1c1917; line-height: 1.2;">BARISTA</div>
@@ -515,8 +515,8 @@ export function renderMonthlyExecutiveReportHtml(
               <div style="width: 40px; height: 40px; border-radius: 50%; background: #EF6340; margin: 0 auto 4px; display: flex; align-items: center; justify-content: center;">
                 <svg viewBox="0 0 1000 1000" style="width: 36px; height: 36px;" fill="none">
                   <circle cx="500" cy="500" r="500" fill="#EF6340"/>
-                  <text x="500" y="672" text-anchor="middle" textLength="780" lengthAdjust="spacingAndGlyphs" font-family="Arial Narrow, sans-serif" font-size="345" font-weight="700" fill="#FFFFFF">BARISTA</text>
-                  <rect x="502" y="640" width="150" height="32" rx="1" fill="#641B0B"/>
+                  <text x="500" y="595" text-anchor="middle" textLength="780" lengthAdjust="spacingAndGlyphs" font-family="'Arial Narrow', 'Liberation Sans Narrow', 'Impact', sans-serif" font-size="340" font-weight="700" fill="#FFFFFF">BARISTA</text>
+                  <rect x="502" y="630" width="150" height="32" rx="2" fill="#641B0B"/>
                 </svg>
               </div>
               <div style="font-family: serif; font-weight: 900; letter-spacing: 2px; font-size: 16px; color: #1c1917; line-height: 1.2;">BARISTA</div>
