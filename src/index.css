@@ -131,7 +131,7 @@ input[type="number"] {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 8mm 10mm 8mm 10mm;
+    margin: 6mm 8mm 6mm 8mm;
   }
 
   html, body {
@@ -161,6 +161,7 @@ input[type="number"] {
     width: 100% !important;
     max-width: 100% !important;
     height: auto !important;
+    min-height: 0 !important;
     margin: 0 auto !important;
     padding: 0 !important;
     background: #ffffff !important;
@@ -189,13 +190,15 @@ input[type="number"] {
     inset: auto !important;
   }
 
-  /* Document body: retains balanced inner padding and rounded elegance */
+  /* Document body: zero outer padding in print so it perfectly fills exact page without overflow */
   #print-root .print-content {
     position: static !important;
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 auto !important;
-    padding: 4mm 6mm !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
     background: #ffffff !important;
     color: #000000 !important;
     box-shadow: none !important;
@@ -223,15 +226,48 @@ input[type="number"] {
     page-break-inside: avoid !important;
   }
 
-  thead {
+  #print-root div,
+  #print-root .overflow-hidden,
+  #print-root .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  table,
+  #print-root table {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  thead,
+  #print-root thead {
     display: table-header-group !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
-  tfoot {
+  tfoot,
+  #print-root tfoot {
     display: table-footer-group !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
-  tr {
+  tbody,
+  #print-root tbody {
+    break-inside: auto !important;
+  }
+
+  tr,
+  #print-root tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    break-after: auto !important;
+  }
+
+  td,
+  th,
+  #print-root td,
+  #print-root th {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }

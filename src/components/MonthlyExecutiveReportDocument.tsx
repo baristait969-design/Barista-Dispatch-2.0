@@ -39,7 +39,7 @@ export const MonthlyExecutiveReportDocument: React.FC<MonthlyExecutiveReportDocu
   return (
     <div
       id={id}
-      className={`print-content bg-white text-[#1c1917] w-full max-w-[794px] min-h-[1123px] p-4 sm:p-6 print:p-2 box-border mx-auto rounded-xl print:rounded-none shadow-md print:shadow-none ${className}`}
+      className={`print-content bg-white text-[#1c1917] w-full max-w-[794px] min-h-[850px] print:min-h-0 p-4 sm:p-6 print:p-0 print:m-0 box-border mx-auto rounded-xl print:rounded-none shadow-md print:shadow-none ${className}`}
       style={{
         boxSizing: 'border-box',
         color: '#1c1917',
@@ -109,7 +109,7 @@ export const MonthlyExecutiveReportDocument: React.FC<MonthlyExecutiveReportDocu
             No dispatch logs available for the selected period.
           </div>
         ) : (
-          <div className="border-2 border-[#1c1917] rounded-lg overflow-hidden" style={{ borderColor: '#1c1917', backgroundColor: '#ffffff' }}>
+          <div className="border-2 border-[#1c1917] rounded-lg overflow-hidden print:overflow-visible print:border-2" style={{ borderColor: '#1c1917', backgroundColor: '#ffffff' }}>
             <table className="w-full text-left text-[10.5px] border-collapse" style={{ borderColor: '#1c1917', borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
               <thead>
                 <tr className="bg-[#1c1917] text-white font-bold uppercase text-[9px] tracking-wider" style={{ backgroundColor: '#1c1917', color: '#ffffff', borderBottom: '2px solid #1c1917' }}>
