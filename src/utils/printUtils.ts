@@ -474,18 +474,18 @@ export function renderMonthlyExecutiveReportHtml(
     const aggregatedItems = Array.from(aggregatedMap.values());
 
     const productsHtml = aggregatedItems.length === 0
-      ? '<div style="color: #a8a29e; font-style: italic; font-size: 11px;">No items recorded</div>'
+      ? '<div style="color: #a8a29e; font-style: italic; font-size: 10px;">No items recorded</div>'
       : aggregatedItems.map(i => `
-          <div style="font-size: 12px; font-weight: 600; color: #0c0a09; text-align: left; padding: 2px 0;">
+          <div style="font-size: 10px; font-weight: 600; color: #0c0a09; text-align: left; padding: 2px 0; min-height: 18px; display: flex; align-items: center; white-space: nowrap;">
             ${i.productName}
           </div>
         `).join('');
 
     const outputsHtml = aggregatedItems.length === 0
-      ? '<span style="color: #a8a29e; font-size: 11px;">0 Units</span>'
+      ? '<span style="color: #a8a29e; font-size: 10px;">0 Units</span>'
       : aggregatedItems.map(i => `
-          <div style="font-size: 12px; font-weight: bold; color: #1c1917; padding: 2px 0;">
-            ${i.quantity} <span style="font-size: 10px; color: #57534e; font-weight: normal;">${i.unit}</span>
+          <div style="font-size: 10px; font-weight: bold; color: #1c1917; padding: 2px 0; min-height: 18px; display: flex; align-items: center; justify-content: center;">
+            ${i.quantity} <span style="font-size: 8.5px; color: #57534e; font-weight: normal; margin-left: 3px;">${i.unit}</span>
           </div>
         `).join('');
 
@@ -493,14 +493,14 @@ export function renderMonthlyExecutiveReportHtml(
 
     return `
       <tr style="border-bottom: 1px solid #1c1917; color: #1c1917;">
-        <td style="padding: 8px 6px; border-right: 1px solid #d6d3d1; border-bottom: 1px solid #1c1917; text-align: center; font-family: monospace; font-weight: bold; color: #57534e; vertical-align: middle;">${index + 1}</td>
-        <td style="padding: 8px 6px; border-right: 1px solid #d6d3d1; border-bottom: 1px solid #1c1917; text-align: center; font-family: monospace; font-weight: bold; font-size: 11px; color: #0c0a09; vertical-align: middle;">${docName}</td>
-        <td style="padding: 8px 6px; border-right: 1px solid #d6d3d1; border-bottom: 1px solid #1c1917; text-align: center; font-weight: bold; font-size: 11px; color: #0c0a09; vertical-align: middle;">${outletsStr}</td>
-        <td style="padding: 8px 6px; border-right: 1px solid #d6d3d1; border-bottom: 1px solid #1c1917; text-align: center; font-size: 11px; font-weight: 600; color: #1c1917; vertical-align: middle;">${log.driverName}</td>
-        <td style="padding: 8px 6px; border-right: 1px solid #d6d3d1; border-bottom: 1px solid #1c1917; text-align: center; font-size: 11px; color: #1c1917; vertical-align: middle;">${log.supervisor}</td>
-        <td style="padding: 8px 10px; border-right: 1px solid #d6d3d1; border-bottom: 1px solid #1c1917; vertical-align: middle; min-width: 180px;">${productsHtml}</td>
-        <td style="padding: 8px 6px; border-right: 1px solid #d6d3d1; border-bottom: 1px solid #1c1917; text-align: center; font-family: monospace; font-size: 11px; background-color: #ffffff; vertical-align: middle;">${outputsHtml}</td>
-        <td style="padding: 8px 6px; border-bottom: 1px solid #1c1917; text-align: center; font-family: monospace; font-weight: bold; font-size: 11px; color: #1c1917; vertical-align: middle;">${avgLogTemp} °C</td>
+        <td style="padding: 6px 4px; border-right: 1px solid #d6d3d1; border-bottom: 1px solid #1c1917; text-align: center; font-family: monospace; font-weight: bold; color: #57534e; vertical-align: middle; width: 24px;">${index + 1}</td>
+        <td style="padding: 6px 4px; border-right: 1px solid #d6d3d1; border-bottom: 1px solid #1c1917; text-align: center; font-family: monospace; font-weight: bold; font-size: 10px; color: #0c0a09; vertical-align: middle; width: 72px;">${docName}</td>
+        <td style="padding: 6px 4px; border-right: 1px solid #d6d3d1; border-bottom: 1px solid #1c1917; text-align: center; font-weight: bold; font-size: 10px; color: #0c0a09; vertical-align: middle; width: 85px;">${outletsStr}</td>
+        <td style="padding: 6px 4px; border-right: 1px solid #d6d3d1; border-bottom: 1px solid #1c1917; text-align: center; font-size: 9.5px; font-weight: 600; color: #1c1917; vertical-align: middle; width: 75px;">${log.driverName}</td>
+        <td style="padding: 6px 4px; border-right: 1px solid #d6d3d1; border-bottom: 1px solid #1c1917; text-align: center; font-size: 9.5px; color: #1c1917; vertical-align: middle; width: 80px;">${log.supervisor}</td>
+        <td style="padding: 6px 10px; border-right: 1px solid #d6d3d1; border-bottom: 1px solid #1c1917; vertical-align: middle;">${productsHtml}</td>
+        <td style="padding: 6px 4px; border-right: 1px solid #d6d3d1; border-bottom: 1px solid #1c1917; text-align: center; font-family: monospace; font-size: 10px; background-color: #ffffff; vertical-align: middle; width: 70px;">${outputsHtml}</td>
+        <td style="padding: 6px 4px; border-bottom: 1px solid #1c1917; text-align: center; font-family: monospace; font-weight: bold; font-size: 10px; color: #1c1917; vertical-align: middle; width: 48px;">${avgLogTemp} °C</td>
       </tr>
     `;
   }).join('');
@@ -598,17 +598,17 @@ export function renderMonthlyExecutiveReportHtml(
 
       <!-- Dispatches Table -->
       <div style="margin-bottom: 14px;">
-        <table style="width: 100%; border-collapse: collapse; font-size: 11px; border: 2px solid #1c1917;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 10px; border: 2px solid #1c1917; table-layout: fixed;">
           <thead>
-            <tr style="background-color: #1c1917; color: #ffffff; font-weight: bold; text-transform: uppercase; font-size: 9.5px; letter-spacing: 0.5px;">
-              <th style="padding: 8px; border-right: 1px solid #44403c; width: 30px; text-align: center;">#</th>
-              <th style="padding: 8px; border-right: 1px solid #44403c; width: 110px; text-align: center;">Document No</th>
-              <th style="padding: 8px; border-right: 1px solid #44403c; width: 140px; text-align: center;">Destination Outlet</th>
-              <th style="padding: 8px; border-right: 1px solid #44403c; width: 120px; text-align: center;">Dispatch Driver</th>
-              <th style="padding: 8px; border-right: 1px solid #44403c; width: 120px; text-align: center;">Supervisor</th>
-              <th style="padding: 8px 12px; border-right: 1px solid #44403c; text-align: left;">Product Breakdown</th>
-              <th style="padding: 8px; border-right: 1px solid #44403c; width: 100px; text-align: center;">Output</th>
-              <th style="padding: 8px; width: 90px; text-align: center;">Dispatch Temp</th>
+            <tr style="background-color: #1c1917; color: #ffffff; font-weight: bold; text-transform: uppercase; font-size: 9px; letter-spacing: 0.5px;">
+              <th style="padding: 6px 4px; border-right: 1px solid #44403c; width: 24px; text-align: center;">#</th>
+              <th style="padding: 6px 4px; border-right: 1px solid #44403c; width: 72px; text-align: center;">Doc No</th>
+              <th style="padding: 6px 4px; border-right: 1px solid #44403c; width: 85px; text-align: center;">Destination</th>
+              <th style="padding: 6px 4px; border-right: 1px solid #44403c; width: 75px; text-align: center;">Driver</th>
+              <th style="padding: 6px 4px; border-right: 1px solid #44403c; width: 80px; text-align: center;">Supervisor</th>
+              <th style="padding: 6px 10px; border-right: 1px solid #44403c; text-align: left;">Product Breakdown</th>
+              <th style="padding: 6px 4px; border-right: 1px solid #44403c; width: 70px; text-align: center;">Output</th>
+              <th style="padding: 6px 4px; width: 48px; text-align: center;">Temp</th>
             </tr>
           </thead>
           <tbody>

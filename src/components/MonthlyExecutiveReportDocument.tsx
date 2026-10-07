@@ -39,7 +39,7 @@ export const MonthlyExecutiveReportDocument: React.FC<MonthlyExecutiveReportDocu
   return (
     <div
       id={id}
-      className={`print-content bg-white text-[#1c1917] w-full max-w-[794px] min-h-[1123px] print:min-h-0 p-4 sm:p-6 print:p-0 box-border mx-auto rounded-xl print:rounded-none shadow-md print:shadow-none ${className}`}
+      className={`print-content bg-white text-[#1c1917] w-full max-w-[794px] min-h-[1123px] p-4 sm:p-6 print:p-2 box-border mx-auto rounded-xl print:rounded-none shadow-md print:shadow-none ${className}`}
       style={{
         boxSizing: 'border-box',
         color: '#1c1917',
@@ -109,18 +109,18 @@ export const MonthlyExecutiveReportDocument: React.FC<MonthlyExecutiveReportDocu
             No dispatch logs available for the selected period.
           </div>
         ) : (
-          <div className="border-2 border-[#1c1917] rounded-lg overflow-hidden print:overflow-visible" style={{ borderColor: '#1c1917', backgroundColor: '#ffffff' }}>
-            <table className="w-full text-left text-[10.5px] border-collapse" style={{ borderColor: '#1c1917', borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
+          <div className="border-2 border-[#1c1917] rounded-lg overflow-hidden" style={{ borderColor: '#1c1917', backgroundColor: '#ffffff' }}>
+            <table className="w-full text-left text-[10px] border-collapse" style={{ borderColor: '#1c1917', borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
               <thead>
                 <tr className="bg-[#1c1917] text-white font-bold uppercase text-[9px] tracking-wider" style={{ backgroundColor: '#1c1917', color: '#ffffff', borderBottom: '2px solid #1c1917' }}>
-                  <th className="p-2 border-r border-[#44403c] text-center" style={{ borderColor: '#44403c', color: '#ffffff', width: '28px' }}>#</th>
-                  <th className="p-2 border-r border-[#44403c] text-center" style={{ borderColor: '#44403c', color: '#ffffff', width: '78px' }}>Doc No</th>
-                  <th className="p-2 border-r border-[#44403c] text-center" style={{ borderColor: '#44403c', color: '#ffffff', width: '100px' }}>Destination</th>
-                  <th className="p-2 border-r border-[#44403c] text-center" style={{ borderColor: '#44403c', color: '#ffffff', width: '90px' }}>Driver</th>
-                  <th className="p-2 border-r border-[#44403c] text-center" style={{ borderColor: '#44403c', color: '#ffffff', width: '95px' }}>Supervisor</th>
+                  <th className="p-2 border-r border-[#44403c] text-center" style={{ borderColor: '#44403c', color: '#ffffff', width: '24px' }}>#</th>
+                  <th className="p-2 border-r border-[#44403c] text-center" style={{ borderColor: '#44403c', color: '#ffffff', width: '72px' }}>Doc No</th>
+                  <th className="p-2 border-r border-[#44403c] text-center" style={{ borderColor: '#44403c', color: '#ffffff', width: '85px' }}>Destination</th>
+                  <th className="p-2 border-r border-[#44403c] text-center" style={{ borderColor: '#44403c', color: '#ffffff', width: '75px' }}>Driver</th>
+                  <th className="p-2 border-r border-[#44403c] text-center" style={{ borderColor: '#44403c', color: '#ffffff', width: '80px' }}>Supervisor</th>
                   <th className="p-2 border-r border-[#44403c] text-left pl-2.5" style={{ borderColor: '#44403c', color: '#ffffff' }}>Product Breakdown</th>
-                  <th className="p-2 border-r border-[#44403c] text-center" style={{ borderColor: '#44403c', color: '#ffffff', width: '75px' }}>Output</th>
-                  <th className="p-2 text-center" style={{ color: '#ffffff', width: '58px' }}>Temp</th>
+                  <th className="p-2 border-r border-[#44403c] text-center" style={{ borderColor: '#44403c', color: '#ffffff', width: '70px' }}>Output</th>
+                  <th className="p-2 text-center" style={{ color: '#ffffff', width: '48px' }}>Temp</th>
                 </tr>
               </thead>
               <tbody>
@@ -155,31 +155,31 @@ export const MonthlyExecutiveReportDocument: React.FC<MonthlyExecutiveReportDocu
                       className="text-[#1c1917] hover:bg-[#fafaf9] transition" 
                       style={{ borderBottom: '1px solid #1c1917', color: '#1c1917' }}
                     >
-                      <td className="p-2 text-center font-mono font-bold align-middle text-[10px]" style={{ borderRight: '1px solid #d6d3d1', borderBottom: '1px solid #1c1917', color: '#57534e', width: '28px' }}>
+                      <td className="p-2 text-center font-mono font-bold align-middle text-[10px]" style={{ borderRight: '1px solid #d6d3d1', borderBottom: '1px solid #1c1917', color: '#57534e', width: '24px' }}>
                         {index + 1}
                       </td>
 
                       {/* Document Number */}
-                      <td className="p-2 text-center font-mono font-bold text-[10.5px] align-middle" style={{ borderRight: '1px solid #d6d3d1', borderBottom: '1px solid #1c1917', color: '#0c0a09', width: '78px' }}>
+                      <td className="p-2 text-center font-mono font-bold text-[10px] align-middle" style={{ borderRight: '1px solid #d6d3d1', borderBottom: '1px solid #1c1917', color: '#0c0a09', width: '72px' }}>
                         {docName}
                       </td>
 
-                      <td className="p-2 text-center font-bold text-[10.5px] align-middle" style={{ borderRight: '1px solid #d6d3d1', borderBottom: '1px solid #1c1917', color: '#0c0a09', width: '100px' }}>
+                      <td className="p-2 text-center font-bold text-[10px] align-middle" style={{ borderRight: '1px solid #d6d3d1', borderBottom: '1px solid #1c1917', color: '#0c0a09', width: '85px' }}>
                         <div style={{ color: '#0c0a09' }}>
                           {log.outletNames && log.outletNames.length > 0 ? log.outletNames.join(', ') : 'All Outlets'}
                         </div>
                       </td>
 
-                      <td className="p-2 text-center text-[10px] align-middle" style={{ borderRight: '1px solid #d6d3d1', borderBottom: '1px solid #1c1917', color: '#1c1917', width: '90px' }}>
+                      <td className="p-2 text-center text-[9.5px] align-middle" style={{ borderRight: '1px solid #d6d3d1', borderBottom: '1px solid #1c1917', color: '#1c1917', width: '75px' }}>
                         <div className="font-semibold" style={{ color: '#1c1917' }}>{log.driverName}</div>
                       </td>
 
-                      <td className="p-2 text-center text-[10px] align-middle" style={{ borderRight: '1px solid #d6d3d1', borderBottom: '1px solid #1c1917', color: '#1c1917', width: '95px' }}>
+                      <td className="p-2 text-center text-[9.5px] align-middle" style={{ borderRight: '1px solid #d6d3d1', borderBottom: '1px solid #1c1917', color: '#1c1917', width: '80px' }}>
                         <div className="font-medium" style={{ color: '#1c1917' }}>{log.supervisor}</div>
                       </td>
 
                       {/* Product Breakdown */}
-                      <td className="p-2 text-[10.5px] align-middle pl-2.5" style={{ borderRight: '1px solid #d6d3d1', borderBottom: '1px solid #1c1917' }}>
+                      <td className="p-2 text-[10px] align-middle pl-2.5" style={{ borderRight: '1px solid #d6d3d1', borderBottom: '1px solid #1c1917' }}>
                         {aggregatedItems.length === 0 ? (
                           <div className="italic text-[10px]" style={{ color: '#a8a29e' }}>No items recorded</div>
                         ) : (
@@ -187,8 +187,8 @@ export const MonthlyExecutiveReportDocument: React.FC<MonthlyExecutiveReportDocu
                             {aggregatedItems.map((item, itemIdx) => (
                               <div 
                                 key={itemIdx} 
-                                className="text-[10.5px] font-semibold text-left py-0.5 leading-snug"
-                                style={{ color: '#0c0a09' }}
+                                className="text-[10px] font-semibold text-left py-0.5 leading-snug whitespace-nowrap"
+                                style={{ color: '#0c0a09', minHeight: '18px', display: 'flex', alignItems: 'center' }}
                               >
                                 {item.productName}
                               </div>
@@ -198,7 +198,7 @@ export const MonthlyExecutiveReportDocument: React.FC<MonthlyExecutiveReportDocu
                       </td>
 
                       {/* Output Column */}
-                      <td className="p-2 text-center font-mono text-[10.5px] bg-white align-middle" style={{ borderRight: '1px solid #d6d3d1', borderBottom: '1px solid #1c1917', backgroundColor: '#ffffff', color: '#1c1917', width: '75px' }}>
+                      <td className="p-2 text-center font-mono text-[10px] bg-white align-middle" style={{ borderRight: '1px solid #d6d3d1', borderBottom: '1px solid #1c1917', backgroundColor: '#ffffff', color: '#1c1917', width: '70px' }}>
                         {aggregatedItems.length === 0 ? (
                           <span className="text-[10px]" style={{ color: '#a8a29e' }}>0 Units</span>
                         ) : (
@@ -206,17 +206,17 @@ export const MonthlyExecutiveReportDocument: React.FC<MonthlyExecutiveReportDocu
                             {aggregatedItems.map((item, itemIdx) => (
                               <div 
                                 key={itemIdx} 
-                                className="text-[10.5px] font-bold py-0.5 leading-snug"
-                                style={{ color: '#1c1917' }}
+                                className="text-[10px] font-bold py-0.5 leading-snug"
+                                style={{ color: '#1c1917', minHeight: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                               >
-                                {item.quantity} <span className="text-[9px] font-normal" style={{ color: '#57534e' }}>{item.unit}</span>
+                                {item.quantity} <span className="text-[8.5px] font-normal ml-1" style={{ color: '#57534e' }}>{item.unit}</span>
                               </div>
                             ))}
                           </div>
                         )}
                       </td>
 
-                      <td className="p-2 text-center font-mono font-bold text-[10.5px] align-middle" style={{ borderBottom: '1px solid #1c1917', color: '#1c1917', width: '58px' }}>
+                      <td className="p-2 text-center font-mono font-bold text-[10px] align-middle" style={{ borderBottom: '1px solid #1c1917', color: '#1c1917', width: '48px' }}>
                         {avgLogTemp} °C
                       </td>
                     </tr>
@@ -247,7 +247,7 @@ export const MonthlyExecutiveReportDocument: React.FC<MonthlyExecutiveReportDocu
       </div>
 
       {/* 4. Operational Sign-off & Controlled Certification */}
-      <div className="border-2 border-[#1c1917] rounded-lg overflow-hidden mb-2.5 print:mb-1.5 print-avoid-break print:overflow-visible" style={{ borderColor: '#1c1917', backgroundColor: '#ffffff' }}>
+      <div className="border-2 border-[#1c1917] rounded-lg overflow-hidden mb-2.5 print:mb-1.5" style={{ borderColor: '#1c1917', backgroundColor: '#ffffff' }}>
         <div className="bg-[#1c1917] text-white px-2.5 py-1 print:py-0.5 text-[9.5px] print:text-[8.5px] font-bold uppercase tracking-wider" style={{ backgroundColor: '#1c1917', color: '#ffffff' }}>
           Executive Dispatch & Operations Sign-off
         </div>
