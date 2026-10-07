@@ -601,25 +601,25 @@ export function renderMonthlyExecutiveReportHtml(
         <table style="width: 100%; border-collapse: collapse; font-size: 10px; border: 2px solid #1c1917; table-layout: fixed;">
           <thead>
             <tr style="background-color: #1c1917; color: #ffffff; font-weight: bold; text-transform: uppercase; font-size: 9px; letter-spacing: 0.5px;">
-              <th style="padding: 6px 4px; border-right: 1px solid #44403c; width: 24px; text-align: center;">#</th>
-              <th style="padding: 6px 4px; border-right: 1px solid #44403c; width: 72px; text-align: center;">Doc No</th>
+              <th style="padding: 6px 4px; border-right: 1px solid #44403c; width: 26px; text-align: center;">#</th>
+              <th style="padding: 6px 4px; border-right: 1px solid #44403c; width: 74px; text-align: center;">Doc No</th>
               <th style="padding: 6px 4px; border-right: 1px solid #44403c; width: 85px; text-align: center;">Destination</th>
               <th style="padding: 6px 4px; border-right: 1px solid #44403c; width: 75px; text-align: center;">Driver</th>
               <th style="padding: 6px 4px; border-right: 1px solid #44403c; width: 80px; text-align: center;">Supervisor</th>
               <th style="padding: 6px 10px; border-right: 1px solid #44403c; text-align: left;">Product Breakdown</th>
-              <th style="padding: 6px 4px; border-right: 1px solid #44403c; width: 70px; text-align: center;">Output</th>
-              <th style="padding: 6px 4px; width: 48px; text-align: center;">Temp</th>
+              <th style="padding: 6px 4px; border-right: 1px solid #44403c; width: 72px; text-align: center;">Output</th>
+              <th style="padding: 6px 4px; width: 64px; text-align: center;">Temp</th>
             </tr>
           </thead>
           <tbody>
             ${tableRowsHtml}
           </tbody>
           <tfoot>
-            <tr style="background-color: #f5f5f4; font-weight: bold; font-size: 11px; color: #1c1917;">
-              <td colspan="5" style="border-top: 2px solid #1c1917; padding: 10px; text-align: center; text-transform: uppercase; font-weight: 900; border-right: 1px solid #d6d3d1;">TOTAL DISPATCHED OUTPUT ACROSS ALL OUTLETS:</td>
-              <td style="border-top: 2px solid #1c1917; padding: 10px 12px; font-family: monospace; font-size: 11px; color: #57534e; border-right: 1px solid #d6d3d1;">${stats.totalDispatches} Total Deliveries</td>
-              <td style="border-top: 2px solid #1c1917; padding: 10px 8px; text-align: center; font-family: monospace; font-size: 13px; background-color: #e7e5e4; font-weight: 900; border-right: 1px solid #d6d3d1;">${stats.totalUnitsDispatched} <span style="font-size: 10px; font-weight: normal;">Units</span></td>
-              <td style="border-top: 2px solid #1c1917; padding: 10px 8px; text-align: center; font-family: monospace; font-size: 11px; font-weight: bold;">${stats.averageTemp} &deg;C avg</td>
+            <tr style="background-color: #f5f5f4; font-weight: bold; font-size: 10px; color: #1c1917;">
+              <td colspan="5" style="border-top: 2px solid #1c1917; padding: 8px 6px; text-align: center; text-transform: uppercase; font-weight: 900; border-right: 1px solid #e7e5e4;">TOTAL DISPATCHED OUTPUT ACROSS ALL OUTLETS:</td>
+              <td style="border-top: 2px solid #1c1917; padding: 8px 10px; font-family: monospace; font-size: 10px; color: #57534e; border-right: 1px solid #e7e5e4;">${stats.totalDispatches} Total Deliveries</td>
+              <td style="border-top: 2px solid #1c1917; padding: 8px 4px; text-align: center; font-family: monospace; font-size: 11px; background-color: #e7e5e4; font-weight: 900; border-right: 1px solid #e7e5e4; width: 72px;">${stats.totalUnitsDispatched} <span style="font-size: 9px; font-weight: normal;">Units</span></td>
+              <td style="border-top: 2px solid #1c1917; padding: 8px 4px; text-align: center; font-family: monospace; font-size: 10px; font-weight: bold; white-space: nowrap; width: 64px;">${stats.averageTemp} &deg;C</td>
             </tr>
           </tfoot>
         </table>

@@ -83,7 +83,7 @@ export const DocumentHaccpHeader: React.FC<DocumentHaccpHeaderProps> = ({
                   {title}
                 </div>
                 {!hideHaccpLink && haccpLink && (
-                  <div style={{ display: 'inline-block', padding: '2px 8px', backgroundColor: '#ffedd5', color: '#9a3412', border: '1.5px solid #1c1917', borderRadius: '4px', fontSize: '8.5px', fontWeight: 'bold', fontFamily: 'monospace', margin: '2px 0' }}>
+                  <div style={{ display: 'inline-block', padding: '2px 8px', backgroundColor: '#fff7ed', color: '#c2410c', border: '1px solid #fdba74', borderRadius: '4px', fontSize: '8.5px', fontWeight: 'bold', fontFamily: 'monospace', margin: '2px 0' }}>
                     {haccpLink}
                   </div>
                 )}
@@ -93,7 +93,7 @@ export const DocumentHaccpHeader: React.FC<DocumentHaccpHeaderProps> = ({
                   </div>
                 )}
                 {previousDocumentName && (
-                  <div style={{ fontSize: '8px', fontFamily: 'monospace', color: '#57534e', backgroundColor: '#f5f5f4', padding: '1.5px 5px', borderRadius: '3px', border: '1.5px solid #1c1917', marginTop: '2px', display: 'inline-block', fontWeight: 600 }}>
+                  <div style={{ fontSize: '8px', fontFamily: 'monospace', color: '#57534e', backgroundColor: '#f5f5f4', padding: '1.5px 5px', borderRadius: '3px', border: '1px solid #d6d3d1', marginTop: '2px', display: 'inline-block', fontWeight: 600 }}>
                     Rev of: {previousDocumentName}
                   </div>
                 )}
@@ -109,15 +109,15 @@ export const DocumentHaccpHeader: React.FC<DocumentHaccpHeaderProps> = ({
                 <table style={{ width: '100%', height: '100%', borderCollapse: 'collapse', textAlign: 'center' }}>
                   <tbody>
                     {/* Row 1: Record Code */}
-                    <tr style={{ borderBottom: '1.5px solid #1c1917' }}>
+                    <tr style={{ borderBottom: '1px solid #d6d3d1' }}>
                       <td colSpan={2} style={{ padding: '7px 4px', textAlign: 'center', verticalAlign: 'middle' }}>
                         <div style={{ fontSize: '7.5px', textTransform: 'uppercase', color: '#78716c', fontWeight: 700, lineHeight: 1.1 }}>Record Code</div>
                         <div style={{ fontFamily: 'monospace', fontWeight: 900, fontSize: '11px', color: '#1c1917', lineHeight: 1.2, marginTop: '2px' }}>{docCode}</div>
                       </td>
                     </tr>
                     {/* Row 2: Effective Date & Revision */}
-                    <tr style={{ borderBottom: '1.5px solid #1c1917' }}>
-                      <td style={{ width: '50%', padding: '6px 3px', borderRight: '1.5px solid #1c1917', textAlign: 'center', verticalAlign: 'middle' }}>
+                    <tr style={{ borderBottom: '1px solid #d6d3d1' }}>
+                      <td style={{ width: '50%', padding: '6px 3px', borderRight: '1px solid #d6d3d1', textAlign: 'center', verticalAlign: 'middle' }}>
                         <div style={{ fontSize: '7.5px', textTransform: 'uppercase', color: '#78716c', fontWeight: 600, lineHeight: 1.1 }}>Effective Date</div>
                         <div style={{ fontFamily: 'monospace', fontSize: '8.5px', fontWeight: 'bold', color: '#1c1917', lineHeight: 1.2, marginTop: '1px' }}>{effectiveDate}</div>
                       </td>
@@ -128,7 +128,7 @@ export const DocumentHaccpHeader: React.FC<DocumentHaccpHeaderProps> = ({
                     </tr>
                     {/* Row 3: Approved By & Document Ref */}
                     <tr>
-                      <td style={{ width: '50%', padding: '6px 3px', borderRight: '1.5px solid #1c1917', textAlign: 'center', verticalAlign: 'middle' }}>
+                      <td style={{ width: '50%', padding: '6px 3px', borderRight: '1px solid #d6d3d1', textAlign: 'center', verticalAlign: 'middle' }}>
                         <div style={{ fontSize: '7.5px', textTransform: 'uppercase', color: '#78716c', fontWeight: 600, lineHeight: 1.1 }}>Approved By</div>
                         <div style={{ fontSize: '8.5px', fontWeight: 'bold', color: '#1c1917', lineHeight: 1.2, marginTop: '1px', wordBreak: 'break-word', padding: '0 2px' }}>{approvedBy}</div>
                       </td>
