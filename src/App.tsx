@@ -19,7 +19,8 @@ import {
   DispatchLog, 
   BatchLog, 
   UserProfile,
-  MonthlyDispatchCycle 
+  MonthlyDispatchCycle,
+  DamagedItem 
 } from './types';
 import { 
   INITIAL_BATCHES, 
@@ -40,6 +41,7 @@ import {
   subscribeBatchLogs, 
   subscribeUsers,
   subscribeMonthlyCycle,
+  subscribeDamagedItems,
   checkAndApplyAutomaticMonthlyReset,
   getDefaultMonthlyCycle
 } from './services/dataService';
@@ -85,6 +87,7 @@ const MainContent: React.FC = () => {
   const [dispatchLogs, setDispatchLogs] = useState<DispatchLog[]>([]);
   const [batchLogs, setBatchLogs] = useState<BatchLog[]>([]);
   const [usersList, setUsersList] = useState<UserProfile[]>(INITIAL_USERS);
+  const [damagedItems, setDamagedItems] = useState<DamagedItem[]>([]);
   const [dispatchCycle, setDispatchCycle] = useState<MonthlyDispatchCycle>(getDefaultMonthlyCycle());
 
   useEffect(() => {
@@ -95,6 +98,10 @@ const MainContent: React.FC = () => {
 
     const unsubBatches = subscribeBatches((data) => {
       setBatches(data || []);
+    });
+
+    const unsubDamaged = subscribeDamagedItems((data) => {
+      setDamagedItems(data || []);
     });
 
     const unsubOutlets = subscribeOutlets((data) => {
@@ -135,6 +142,7 @@ const MainContent: React.FC = () => {
 
     return () => {
       unsubBatches();
+      unsubDamaged();
       unsubOutlets();
       unsubProducts();
       unsubDrivers();
@@ -192,6 +200,7 @@ const MainContent: React.FC = () => {
                 batches={batches}
                 batchLogs={batchLogs}
                 products={products}
+                damagedItems={damagedItems}
               />
             )}
 

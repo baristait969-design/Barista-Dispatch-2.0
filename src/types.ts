@@ -46,6 +46,29 @@ export interface InventoryBatch {
   createdBy?: string;
   createdAt: string;
   updatedAt?: string;
+  status?: 'active' | 'expired' | 'damaged' | 'disposed';
+  isExpired?: boolean;
+  damagedQuantity?: number;
+  expiryRectifiedAt?: string;
+}
+
+export interface DamagedItem {
+  id: string;
+  productName: string;
+  category?: string;
+  batchNo: string;
+  batchId?: string;
+  quantity: number;
+  unit: string;
+  reason: string; // e.g. 'Physical Damage / Dropped', 'Packaging Damaged / Broken Seal', 'Temperature Abuse / Thawed', 'Quality Defect', 'Expired / Spoiled', 'Other'
+  notes?: string;
+  damagedDate: string; // YYYY-MM-DD
+  reportedBy: string;
+  restored?: boolean;
+  restoredAt?: string;
+  restoredBy?: string;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface BatchLog {

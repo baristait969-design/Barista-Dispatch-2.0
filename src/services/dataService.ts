@@ -12,12 +12,13 @@ import {
   writeBatch 
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { InventoryBatch, BatchLog, Outlet, Product, DispatchLog, Driver, UserProfile, UserRole, MonthlyDispatchCycle } from '../types';
+import { InventoryBatch, BatchLog, Outlet, Product, DispatchLog, Driver, UserProfile, UserRole, MonthlyDispatchCycle, DamagedItem } from '../types';
 import { INITIAL_BATCHES, INITIAL_OUTLETS, INITIAL_DRIVERS, INITIAL_USERS, INITIAL_PRODUCT_CATALOG } from '../data/seedData';
 import { getProductKeyCode } from '../utils/batchUtils';
 
 // Collections
 const BATCHES_COL = 'inventory';
+const DAMAGED_COL = 'damaged_inventory';
 const LOGS_COL = 'batch_logs';
 const OUTLETS_COL = 'outlets';
 const PRODUCTS_COL = 'products';
@@ -250,6 +251,259 @@ export async function deleteInventoryBatch(id: string): Promise<void> {
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `${BATCHES_COL}/${id}`);
+    throw error;
+  }
+}
+
+// ----------------- DAMAGED ITEMS -----------------
+export function subscribeDamagedItems(callback: (items: DamagedItem[]) => void) {
+  const q = query(collection(db, DAMAGED_COL));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const items: DamagedItem[] = [];
+      snapshot.forEach((d) => {
+        items.push({ id: d.id, ...d.data() } as DamagedItem);
+      });
+      items.sort((a, b) => (b.damagedDate || b.createdAt || '').localeCompare(a.damagedDate || a.createdAt || ''));
+      callback(items);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.GET, DAMAGED_COL);
+    }
+  );
+}
+
+export async function recordDamagedStock(
+  item: Omit<DamagedItem, 'id' | 'createdAt'>,
+  userEmail: string
+): Promise<string> {
+  const id = `dmg-${Date.now()}`;
+  try {
+    const newRecord: DamagedItem = {
+      ...item,
+      id,
+      createdAt: new Date().toISOString()
+    };
+    await setDoc(doc(db, DAMAGED_COL, id), sanitizeForFirestore(newRecord));
+
+    if (item.batchId && item.quantity > 0) {
+      const batchRef = doc(db, BATCHES_COL, item.batchId);
+      const batchSnap = await getDoc(batchRef);
+      if (batchSnap.exists()) {
+        const batchData = batchSnap.data() as InventoryBatch;
+        const currentQty = batchData.quantity || 0;
+        const newQty = Math.max(0, currentQty - item.quantity);
+        await updateDoc(batchRef, {
+          quantity: newQty,
+          damagedQuantity: (batchData.damagedQuantity || 0) + item.quantity,
+          updatedAt: new Date().toISOString()
+        });
+
+        await addBatchLog({
+          batchId: item.batchId,
+          batchNo: item.batchNo || batchData.batchNo,
+          productName: item.productName || batchData.productName,
+          action: 'manual_adjustment',
+          quantityChanged: -item.quantity,
+          previousQty: currentQty,
+          newQty: newQty,
+          recordedBy: userEmail,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+
+    return id;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `${DAMAGED_COL}/${id}`);
+    throw error;
+  }
+}
+
+export async function updateDamagedStock(
+  id: string,
+  updates: Partial<DamagedItem>,
+  oldQuantity: number,
+  userEmail: string
+): Promise<void> {
+  try {
+    const recordRef = doc(db, DAMAGED_COL, id);
+    const snap = await getDoc(recordRef);
+    if (!snap.exists()) return;
+    const currentRecord = snap.data() as DamagedItem;
+
+    await updateDoc(recordRef, sanitizeForFirestore({
+      ...updates,
+      updatedAt: new Date().toISOString()
+    }));
+
+    if (updates.quantity !== undefined && updates.quantity !== oldQuantity && currentRecord.batchId) {
+      const diff = oldQuantity - updates.quantity;
+      const batchRef = doc(db, BATCHES_COL, currentRecord.batchId);
+      const batchSnap = await getDoc(batchRef);
+      if (batchSnap.exists()) {
+        const batchData = batchSnap.data() as InventoryBatch;
+        const currentBatchQty = batchData.quantity || 0;
+        const updatedBatchQty = Math.max(0, currentBatchQty + diff);
+        await updateDoc(batchRef, {
+          quantity: updatedBatchQty,
+          damagedQuantity: Math.max(0, (batchData.damagedQuantity || 0) - diff),
+          updatedAt: new Date().toISOString()
+        });
+
+        await addBatchLog({
+          batchId: currentRecord.batchId,
+          batchNo: currentRecord.batchNo,
+          productName: currentRecord.productName,
+          action: 'manual_adjustment',
+          quantityChanged: diff,
+          previousQty: currentBatchQty,
+          newQty: updatedBatchQty,
+          recordedBy: userEmail,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `${DAMAGED_COL}/${id}`);
+    throw error;
+  }
+}
+
+export async function restoreDamagedStock(
+  id: string,
+  userEmail: string
+): Promise<void> {
+  try {
+    const recordRef = doc(db, DAMAGED_COL, id);
+    const snap = await getDoc(recordRef);
+    if (!snap.exists()) return;
+    const record = snap.data() as DamagedItem;
+
+    if (record.batchId && record.quantity > 0) {
+      const batchRef = doc(db, BATCHES_COL, record.batchId);
+      const batchSnap = await getDoc(batchRef);
+      if (batchSnap.exists()) {
+        const batchData = batchSnap.data() as InventoryBatch;
+        const currentQty = batchData.quantity || 0;
+        const restoredQty = currentQty + record.quantity;
+        await updateDoc(batchRef, {
+          quantity: restoredQty,
+          damagedQuantity: Math.max(0, (batchData.damagedQuantity || 0) - record.quantity),
+          updatedAt: new Date().toISOString()
+        });
+
+        await addBatchLog({
+          batchId: record.batchId,
+          batchNo: record.batchNo,
+          productName: record.productName,
+          action: 'manual_adjustment',
+          quantityChanged: record.quantity,
+          previousQty: currentQty,
+          newQty: restoredQty,
+          recordedBy: userEmail,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+
+    await deleteDoc(recordRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `${DAMAGED_COL}/${id}`);
+    throw error;
+  }
+}
+
+export async function deleteDamagedStock(
+  id: string
+): Promise<void> {
+  try {
+    await deleteDoc(doc(db, DAMAGED_COL, id));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `${DAMAGED_COL}/${id}`);
+    throw error;
+  }
+}
+
+// ----------------- EXPIRED BATCHES RECTIFICATION -----------------
+export async function rectifyExpiredBatch(
+  batchId: string,
+  updates: {
+    useByDate: string;
+    prodDate?: string;
+    quantity?: number;
+    notes?: string;
+  },
+  userEmail: string
+): Promise<void> {
+  try {
+    const batchRef = doc(db, BATCHES_COL, batchId);
+    const batchSnap = await getDoc(batchRef);
+    if (!batchSnap.exists()) return;
+    const batchData = batchSnap.data() as InventoryBatch;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const isStillExpired = updates.useByDate < todayStr;
+
+    await updateDoc(batchRef, sanitizeForFirestore({
+      useByDate: updates.useByDate,
+      ...(updates.prodDate ? { prodDate: updates.prodDate } : {}),
+      ...(updates.quantity !== undefined ? { quantity: updates.quantity } : {}),
+      isExpired: isStillExpired,
+      status: isStillExpired ? 'expired' : 'active',
+      expiryRectifiedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }));
+
+    await addBatchLog({
+      batchId,
+      batchNo: batchData.batchNo,
+      productName: batchData.productName,
+      action: 'manual_adjustment',
+      quantityChanged: updates.quantity !== undefined ? (updates.quantity - batchData.quantity) : 0,
+      previousQty: batchData.quantity,
+      newQty: updates.quantity !== undefined ? updates.quantity : batchData.quantity,
+      recordedBy: userEmail,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `${BATCHES_COL}/${batchId}`);
+    throw error;
+  }
+}
+
+export async function disposeExpiredBatch(
+  batchId: string,
+  userEmail: string
+): Promise<void> {
+  try {
+    const batchRef = doc(db, BATCHES_COL, batchId);
+    const batchSnap = await getDoc(batchRef);
+    if (!batchSnap.exists()) return;
+    const batchData = batchSnap.data() as InventoryBatch;
+    const prevQty = batchData.quantity || 0;
+
+    await updateDoc(batchRef, {
+      quantity: 0,
+      status: 'disposed',
+      isExpired: true,
+      updatedAt: new Date().toISOString()
+    });
+
+    await addBatchLog({
+      batchId,
+      batchNo: batchData.batchNo,
+      productName: batchData.productName,
+      action: 'manual_adjustment',
+      quantityChanged: -prevQty,
+      previousQty: prevQty,
+      newQty: 0,
+      recordedBy: userEmail,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `${BATCHES_COL}/${batchId}`);
     throw error;
   }
 }
