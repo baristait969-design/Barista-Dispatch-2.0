@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ModalDialogProvider } from './context/ModalDialogContext';
 import { Navbar } from './components/Navbar';
@@ -259,6 +260,7 @@ export default function App() {
     <AuthProvider>
       <ModalDialogProvider>
         <MainContent />
+        <Analytics />
       </ModalDialogProvider>
     </AuthProvider>
   );
