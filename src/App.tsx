@@ -11,6 +11,7 @@ import { OutletsView } from './components/OutletsView';
 import { ProductsView } from './components/ProductsView';
 import { UsersView } from './components/UsersView';
 import { ReportsView } from './components/ReportsView';
+import { SystemBackupModal } from './components/SystemBackupModal';
 import { 
   InventoryBatch, 
   Outlet, 
@@ -43,7 +44,9 @@ import {
   subscribeMonthlyCycle,
   subscribeDamagedItems,
   checkAndApplyAutomaticMonthlyReset,
-  getDefaultMonthlyCycle
+  getDefaultMonthlyCycle,
+  getAutoBackupScheduleConfig,
+  executeAutoScheduledBackup
 } from './services/dataService';
 import { Loader2, ShieldAlert } from 'lucide-react';
 
@@ -65,6 +68,7 @@ const MainContent: React.FC = () => {
 
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [targetFormLogId, setTargetFormLogId] = useState<string | null>(null);
+  const [backupModalOpen, setBackupModalOpen] = useState<boolean>(false);
 
   const handleNavigate = (tab: string, targetId?: string) => {
     if (targetId && tab === 'forms') {
@@ -140,6 +144,51 @@ const MainContent: React.FC = () => {
       if (cycle) setDispatchCycle(cycle);
     });
 
+    // Automated Backup Scheduler Check (runs on mount and every 15 minutes)
+    const checkAutoBackups = async () => {
+      try {
+        const config = await getAutoBackupScheduleConfig();
+        const now = new Date();
+        const todayStr = now.toISOString().slice(0, 10);
+        const currentHour = now.getHours();
+        const targetHour = parseInt((config.dailyTime || '23:59').split(':')[0], 10);
+
+        // Daily Schedule Check
+        if (config.dailyEnabled) {
+          const lastDailyDate = config.lastDailyRun ? config.lastDailyRun.slice(0, 10) : '';
+          if (lastDailyDate !== todayStr && currentHour >= targetHour) {
+            console.log('[Auto-Backup] Executing scheduled daily backup...');
+            await executeAutoScheduledBackup('daily', null, { autoDownloadOverride: false });
+          }
+        }
+
+        // Monthly Schedule Check
+        if (config.monthlyEnabled) {
+          const currentMonthStr = todayStr.slice(0, 7);
+          const lastMonthlyMonth = config.lastMonthlyRun ? config.lastMonthlyRun.slice(0, 7) : '';
+          const dayOfMonth = now.getDate();
+          
+          if (lastMonthlyMonth !== currentMonthStr) {
+            if (config.monthlyDay === '1st' && dayOfMonth === 1) {
+              console.log('[Auto-Backup] Executing scheduled monthly backup (1st of month)...');
+              await executeAutoScheduledBackup('monthly', null, { autoDownloadOverride: false });
+            } else if (config.monthlyDay === 'last_day') {
+              const tomorrow = new Date(now.getFullYear(), now.getMonth(), dayOfMonth + 1);
+              if (tomorrow.getDate() === 1) {
+                console.log('[Auto-Backup] Executing scheduled monthly backup (last day of month)...');
+                await executeAutoScheduledBackup('monthly', null, { autoDownloadOverride: false });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[Auto-Backup] Scheduled run check:', err);
+      }
+    };
+
+    checkAutoBackups();
+    const backupInterval = setInterval(checkAutoBackups, 15 * 60 * 1000);
+
     return () => {
       unsubBatches();
       unsubDamaged();
@@ -150,6 +199,7 @@ const MainContent: React.FC = () => {
       unsubLogs();
       unsubUsers();
       unsubCycle();
+      clearInterval(backupInterval);
     };
   }, []);
 
@@ -171,7 +221,12 @@ const MainContent: React.FC = () => {
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans selection:bg-amber-500 selection:text-stone-950">
       <MustResetPasswordModal />
-      <Navbar currentTab={currentTab} setCurrentTab={setCurrentTab} />
+      <SystemBackupModal isOpen={backupModalOpen} onClose={() => setBackupModalOpen(false)} />
+      <Navbar 
+        currentTab={currentTab} 
+        setCurrentTab={setCurrentTab} 
+        onOpenBackup={() => setBackupModalOpen(true)}
+      />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
         {accessibleTabs.length === 0 ? (
@@ -192,6 +247,7 @@ const MainContent: React.FC = () => {
                 products={products}
                 dispatchCycle={dispatchCycle}
                 onNavigate={handleNavigate}
+                onOpenBackup={() => setBackupModalOpen(true)}
               />
             )}
 
@@ -243,6 +299,7 @@ const MainContent: React.FC = () => {
                 drivers={drivers}
                 usersList={usersList}
                 onNavigate={handleNavigate}
+                onOpenBackup={() => setBackupModalOpen(true)}
               />
             )}
           </>

@@ -12,7 +12,7 @@ import {
   writeBatch 
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { InventoryBatch, BatchLog, Outlet, Product, DispatchLog, Driver, UserProfile, UserRole, MonthlyDispatchCycle, DamagedItem } from '../types';
+import { InventoryBatch, BatchLog, Outlet, Product, DispatchLog, Driver, UserProfile, UserRole, MonthlyDispatchCycle, DamagedItem, SystemBackupPayload, AutoBackupScheduleConfig, BackupHistoryItem } from '../types';
 import { INITIAL_BATCHES, INITIAL_OUTLETS, INITIAL_DRIVERS, INITIAL_USERS, INITIAL_PRODUCT_CATALOG } from '../data/seedData';
 import { getProductKeyCode } from '../utils/batchUtils';
 
@@ -1484,3 +1484,486 @@ export async function deleteUserRecord(userId: string): Promise<void> {
     throw error;
   }
 }
+
+// ==========================================
+// FULL SYSTEM BACKUP & DISASTER RECOVERY
+// ==========================================
+
+/**
+ * Fetches all collections from Firestore to assemble an authoritative snapshot of the whole system.
+ */
+export async function fetchFullSystemBackupData(
+  currentUser?: Partial<UserProfile> | null
+): Promise<SystemBackupPayload> {
+  try {
+    const [
+      batchesSnap,
+      damagedSnap,
+      productsSnap,
+      outletsSnap,
+      dispatchSnap,
+      driversSnap,
+      logsSnap,
+      usersSnap,
+      metaSnap
+    ] = await Promise.all([
+      getDocs(collection(db, BATCHES_COL)),
+      getDocs(collection(db, DAMAGED_COL)),
+      getDocs(collection(db, PRODUCTS_COL)),
+      getDocs(collection(db, OUTLETS_COL)),
+      getDocs(collection(db, DISPATCH_COL)),
+      getDocs(collection(db, DRIVERS_COL)),
+      getDocs(collection(db, LOGS_COL)),
+      getDocs(collection(db, USERS_COL)),
+      getDocs(collection(db, 'system_metadata'))
+    ]);
+
+    const inventory = batchesSnap.docs.map(d => ({ id: d.id, ...d.data() })) as InventoryBatch[];
+    const damaged_inventory = damagedSnap.docs.map(d => ({ id: d.id, ...d.data() })) as DamagedItem[];
+    const products = productsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Product[];
+    const outlets = outletsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Outlet[];
+    const dispatch_logs = dispatchSnap.docs.map(d => ({ id: d.id, ...d.data() })) as DispatchLog[];
+    const drivers = driversSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Driver[];
+    const batch_logs = logsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as BatchLog[];
+    const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() })) as UserProfile[];
+    const system_metadata = metaSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    const monthlyCycleDoc = system_metadata.find(m => m.id === 'monthly_dispatch_cycle');
+    const monthly_cycle = monthlyCycleDoc ? (monthlyCycleDoc as unknown as MonthlyDispatchCycle) : undefined;
+
+    const payload: SystemBackupPayload = {
+      version: '1.0',
+      app: 'Barista Sri Lanka Central Kitchen Management System',
+      haccpDocNo: 'BCL/REC/HACCP/32',
+      generatedAt: new Date().toISOString(),
+      generatedBy: {
+        username: currentUser?.username || 'system_admin',
+        displayName: currentUser?.displayName || 'Administrator',
+        userIdCode: currentUser?.userIdCode || 'USR-ADM-01',
+        role: currentUser?.role || 'admin'
+      },
+      summary: {
+        inventoryBatchesCount: inventory.length,
+        damagedItemsCount: damaged_inventory.length,
+        productsCount: products.length,
+        outletsCount: outlets.length,
+        dispatchLogsCount: dispatch_logs.length,
+        driversCount: drivers.length,
+        batchLogsCount: batch_logs.length,
+        usersCount: users.length
+      },
+      data: {
+        inventory,
+        damaged_inventory,
+        products,
+        outlets,
+        dispatch_logs,
+        drivers,
+        batch_logs,
+        users,
+        monthly_cycle,
+        system_metadata
+      }
+    };
+
+    return payload;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, 'system_backup');
+    throw error;
+  }
+}
+
+/**
+ * Triggers a browser download of the full system backup JSON file.
+ */
+export function downloadFullSystemBackup(payload: SystemBackupPayload): string {
+  const jsonStr = JSON.stringify(payload, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const dateStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const filename = `Barista_Central_Kitchen_FULL_BACKUP_${dateStr}.json`;
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  return filename;
+}
+
+/**
+ * Restores system collections from a validated backup payload.
+ * Executes writes in chunked Firestore writeBatch batches (400 items per batch to stay under the 500 limit).
+ */
+export async function restoreFullSystemBackup(
+  payload: SystemBackupPayload,
+  options?: {
+    modulesToRestore?: string[]; // e.g. ['inventory', 'products', 'outlets', 'dispatch_logs', 'drivers', 'damaged_inventory', 'users']
+    operatorUsername?: string;
+  }
+): Promise<{ success: boolean; restoredCount: number; details: Record<string, number> }> {
+  if (!payload || !payload.data) {
+    throw new Error('Invalid backup file format. Expected a valid Barista System Backup payload.');
+  }
+
+  const selected = options?.modulesToRestore || [
+    'inventory',
+    'damaged_inventory',
+    'products',
+    'outlets',
+    'dispatch_logs',
+    'drivers',
+    'batch_logs',
+    'users'
+  ];
+
+  const details: Record<string, number> = {
+    inventory: 0,
+    damaged_inventory: 0,
+    products: 0,
+    outlets: 0,
+    dispatch_logs: 0,
+    drivers: 0,
+    batch_logs: 0,
+    users: 0
+  };
+
+  const writeQueue: Array<{ col: string; docId: string; data: any }> = [];
+
+  if (selected.includes('inventory') && Array.isArray(payload.data.inventory)) {
+    for (const item of payload.data.inventory) {
+      if (item && item.id) {
+        writeQueue.push({ col: BATCHES_COL, docId: item.id, data: sanitizeForFirestore(item) });
+        details.inventory++;
+      }
+    }
+  }
+
+  if (selected.includes('damaged_inventory') && Array.isArray(payload.data.damaged_inventory)) {
+    for (const item of payload.data.damaged_inventory) {
+      if (item && item.id) {
+        writeQueue.push({ col: DAMAGED_COL, docId: item.id, data: sanitizeForFirestore(item) });
+        details.damaged_inventory++;
+      }
+    }
+  }
+
+  if (selected.includes('products') && Array.isArray(payload.data.products)) {
+    for (const item of payload.data.products) {
+      if (item && item.id) {
+        writeQueue.push({ col: PRODUCTS_COL, docId: item.id, data: sanitizeForFirestore(item) });
+        details.products++;
+      }
+    }
+  }
+
+  if (selected.includes('outlets') && Array.isArray(payload.data.outlets)) {
+    for (const item of payload.data.outlets) {
+      if (item && item.id) {
+        writeQueue.push({ col: OUTLETS_COL, docId: item.id, data: sanitizeForFirestore(item) });
+        details.outlets++;
+      }
+    }
+  }
+
+  if (selected.includes('dispatch_logs') && Array.isArray(payload.data.dispatch_logs)) {
+    for (const item of payload.data.dispatch_logs) {
+      if (item && item.id) {
+        writeQueue.push({ col: DISPATCH_COL, docId: item.id, data: sanitizeForFirestore(item) });
+        details.dispatch_logs++;
+      }
+    }
+  }
+
+  if (selected.includes('drivers') && Array.isArray(payload.data.drivers)) {
+    for (const item of payload.data.drivers) {
+      if (item && item.id) {
+        writeQueue.push({ col: DRIVERS_COL, docId: item.id, data: sanitizeForFirestore(item) });
+        details.drivers++;
+      }
+    }
+  }
+
+  if (selected.includes('batch_logs') && Array.isArray(payload.data.batch_logs)) {
+    for (const item of payload.data.batch_logs) {
+      if (item && item.id) {
+        writeQueue.push({ col: LOGS_COL, docId: item.id, data: sanitizeForFirestore(item) });
+        details.batch_logs++;
+      }
+    }
+  }
+
+  if (selected.includes('users') && Array.isArray(payload.data.users)) {
+    for (const item of payload.data.users) {
+      if (item && item.id) {
+        writeQueue.push({ col: USERS_COL, docId: item.id, data: sanitizeForFirestore(item) });
+        details.users++;
+      }
+    }
+  }
+
+  if (payload.data.monthly_cycle) {
+    writeQueue.push({
+      col: 'system_metadata',
+      docId: 'monthly_dispatch_cycle',
+      data: sanitizeForFirestore(payload.data.monthly_cycle)
+    });
+  }
+
+  // Execute in chunks of 350 writes per Firestore batch
+  const CHUNK_SIZE = 350;
+  for (let i = 0; i < writeQueue.length; i += CHUNK_SIZE) {
+    const chunk = writeQueue.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
+    for (const op of chunk) {
+      const docRef = doc(db, op.col, op.docId);
+      batch.set(docRef, op.data, { merge: true });
+    }
+    await batch.commit();
+  }
+
+  // Log system restore audit event
+  try {
+    const auditId = `rst_${Date.now()}`;
+    await setDoc(doc(db, LOGS_COL, auditId), {
+      id: auditId,
+      batchId: 'SYS_BACKUP_RESTORE',
+      batchNo: 'RESTORE-EVENT',
+      productName: 'Full System Restore Executed',
+      action: 'manual_adjustment',
+      quantityChanged: writeQueue.length,
+      previousQty: 0,
+      newQty: writeQueue.length,
+      outletName: 'Central Kitchen Server',
+      recordedBy: options?.operatorUsername || 'system_admin',
+      timestamp: new Date().toISOString()
+    });
+  } catch (auditErr) {
+    console.warn('Could not record system restore audit entry:', auditErr);
+  }
+
+  return {
+    success: true,
+    restoredCount: writeQueue.length,
+    details
+  };
+}
+
+// ==========================================
+// AUTOMATED BACKUP (DAILY & MONTHLY) ENGINE
+// ==========================================
+
+const AUTO_BACKUP_CONFIG_KEY = 'barista_auto_backup_config_v1';
+const AUTO_BACKUP_HISTORY_KEY = 'barista_backup_history_registry_v1';
+
+export const DEFAULT_AUTO_BACKUP_CONFIG: AutoBackupScheduleConfig = {
+  dailyEnabled: true,
+  dailyTime: '23:59',
+  dailyRetentionDays: 14,
+  monthlyEnabled: true,
+  monthlyDay: '1st',
+  monthlyRetentionMonths: 12,
+  autoDownload: false,
+  notifyOnSuccess: true,
+  saveToHistory: true,
+  lastDailyRun: undefined,
+  lastMonthlyRun: undefined
+};
+
+/**
+ * Retrieves the auto-backup schedule settings from Firestore/localStorage.
+ */
+export async function getAutoBackupScheduleConfig(): Promise<AutoBackupScheduleConfig> {
+  try {
+    const docRef = doc(db, 'system_metadata', 'auto_backup_config');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data() as Partial<AutoBackupScheduleConfig>;
+      const merged = { ...DEFAULT_AUTO_BACKUP_CONFIG, ...data };
+      localStorage.setItem(AUTO_BACKUP_CONFIG_KEY, JSON.stringify(merged));
+      return merged;
+    }
+  } catch (err) {
+    console.warn('Firestore auto_backup_config fetch fallback to localStorage:', err);
+  }
+
+  try {
+    const cached = localStorage.getItem(AUTO_BACKUP_CONFIG_KEY);
+    if (cached) {
+      return { ...DEFAULT_AUTO_BACKUP_CONFIG, ...JSON.parse(cached) };
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  return DEFAULT_AUTO_BACKUP_CONFIG;
+}
+
+/**
+ * Persists updated auto-backup schedule preferences to Firestore and localStorage.
+ */
+export async function saveAutoBackupScheduleConfig(config: AutoBackupScheduleConfig): Promise<void> {
+  try {
+    localStorage.setItem(AUTO_BACKUP_CONFIG_KEY, JSON.stringify(config));
+    const docRef = doc(db, 'system_metadata', 'auto_backup_config');
+    await setDoc(docRef, sanitizeForFirestore({ ...config, updatedAt: new Date().toISOString() }), { merge: true });
+  } catch (err) {
+    console.warn('Could not save auto_backup_config to Firestore, preserved in localStorage:', err);
+  }
+}
+
+/**
+ * Retrieves the list of generated backup history records.
+ */
+export async function getBackupHistory(): Promise<BackupHistoryItem[]> {
+  try {
+    const docRef = doc(db, 'system_metadata', 'backup_history_registry');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (Array.isArray(data.items)) {
+        localStorage.setItem(AUTO_BACKUP_HISTORY_KEY, JSON.stringify(data.items));
+        return data.items as BackupHistoryItem[];
+      }
+    }
+  } catch (err) {
+    console.warn('Firestore backup_history fetch fallback to localStorage:', err);
+  }
+
+  try {
+    const cached = localStorage.getItem(AUTO_BACKUP_HISTORY_KEY);
+    if (cached) {
+      return JSON.parse(cached) as BackupHistoryItem[];
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  return [];
+}
+
+/**
+ * Saves a backup record to history and applies retention limits.
+ */
+export async function saveBackupHistoryItem(item: BackupHistoryItem): Promise<void> {
+  try {
+    const existing = await getBackupHistory();
+    // Prepend new item
+    const updated = [item, ...existing.filter(i => i.id !== item.id)];
+    // Enforce safe memory cap (keep up to 50 entries)
+    const trimmed = updated.slice(0, 50);
+
+    localStorage.setItem(AUTO_BACKUP_HISTORY_KEY, JSON.stringify(trimmed));
+
+    try {
+      // Store in firestore without entire heavy payload to conserve Firestore document quota
+      const lightweightItems = trimmed.map(i => ({
+        ...i,
+        payload: undefined // Keep history index lightweight
+      }));
+      const docRef = doc(db, 'system_metadata', 'backup_history_registry');
+      await setDoc(docRef, { items: sanitizeForFirestore(lightweightItems), lastUpdated: new Date().toISOString() }, { merge: true });
+    } catch (fsErr) {
+      console.warn('Could not sync backup history to Firestore:', fsErr);
+    }
+  } catch (err) {
+    console.error('Failed to save backup history item:', err);
+  }
+}
+
+/**
+ * Deletes a backup item from history.
+ */
+export async function deleteBackupHistoryItem(id: string): Promise<void> {
+  const existing = await getBackupHistory();
+  const updated = existing.filter(i => i.id !== id);
+  localStorage.setItem(AUTO_BACKUP_HISTORY_KEY, JSON.stringify(updated));
+
+  try {
+    const docRef = doc(db, 'system_metadata', 'backup_history_registry');
+    await setDoc(docRef, { items: sanitizeForFirestore(updated), lastUpdated: new Date().toISOString() }, { merge: true });
+  } catch (fsErr) {
+    console.warn('Could not update Firestore backup history:', fsErr);
+  }
+}
+
+/**
+ * Clears all backup history.
+ */
+export async function clearAllBackupHistory(): Promise<void> {
+  localStorage.removeItem(AUTO_BACKUP_HISTORY_KEY);
+  try {
+    const docRef = doc(db, 'system_metadata', 'backup_history_registry');
+    await setDoc(docRef, { items: [], lastUpdated: new Date().toISOString() });
+  } catch (fsErr) {
+    console.warn('Could not clear Firestore backup history:', fsErr);
+  }
+}
+
+/**
+ * Generates an automated scheduled backup (Daily or Monthly), archives it in history,
+ * updates config timestamps, and optionally triggers a download.
+ */
+export async function executeAutoScheduledBackup(
+  type: 'daily' | 'monthly',
+  currentUser?: Partial<UserProfile> | null,
+  options?: { autoDownloadOverride?: boolean }
+): Promise<{ filename: string; item: BackupHistoryItem; payload: SystemBackupPayload }> {
+  const operatorName = currentUser?.displayName || currentUser?.username || (type === 'daily' ? 'Automated Daily System' : 'Automated Monthly System');
+  
+  const payload = await fetchFullSystemBackupData(currentUser || {
+    username: type === 'daily' ? 'system_cron_daily' : 'system_cron_monthly',
+    displayName: type === 'daily' ? 'Daily Auto-Backup Scheduler' : 'Monthly Auto-Archive Scheduler',
+    role: 'admin'
+  });
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const timeStr = new Date().toISOString().slice(11, 16).replace(':', '-');
+  const filename = type === 'daily'
+    ? `Barista_Auto_DAILY_Backup_${dateStr}_${timeStr}.json`
+    : `Barista_Auto_MONTHLY_Archive_${dateStr.slice(0, 7)}_${dateStr}.json`;
+
+  const totalItems = Object.values(payload.summary).reduce((acc, count) => acc + count, 0);
+
+  const historyItem: BackupHistoryItem = {
+    id: `bak_${type}_${Date.now()}`,
+    filename,
+    createdAt: new Date().toISOString(),
+    type,
+    itemCount: totalItems,
+    haccpDocNo: 'BCL/REC/HACCP/32',
+    operator: operatorName,
+    summary: { ...payload.summary },
+    payload
+  };
+
+  await saveBackupHistoryItem(historyItem);
+
+  // Update last run time in schedule config
+  const config = await getAutoBackupScheduleConfig();
+  if (type === 'daily') {
+    config.lastDailyRun = new Date().toISOString();
+  } else {
+    config.lastMonthlyRun = new Date().toISOString();
+  }
+  await saveAutoBackupScheduleConfig(config);
+
+  // Auto-download if enabled in config or overridden
+  const shouldDownload = options?.autoDownloadOverride ?? config.autoDownload;
+  if (shouldDownload) {
+    const jsonStr = JSON.stringify(payload, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  return { filename, item: historyItem, payload };
+}
+

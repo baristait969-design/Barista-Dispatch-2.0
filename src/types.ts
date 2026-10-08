@@ -178,3 +178,73 @@ export interface MonthlyDispatchCycle {
   cycleMonth: string; // "2026-09"
   archivedCount?: number;
 }
+
+export interface SystemBackupPayload {
+  version: string;
+  app: string;
+  haccpDocNo: string;
+  generatedAt: string;
+  generatedBy: {
+    username?: string;
+    displayName?: string;
+    userIdCode?: string;
+    role?: string;
+  };
+  summary: {
+    inventoryBatchesCount: number;
+    damagedItemsCount: number;
+    productsCount: number;
+    outletsCount: number;
+    dispatchLogsCount: number;
+    driversCount: number;
+    batchLogsCount: number;
+    usersCount: number;
+  };
+  data: {
+    inventory: InventoryBatch[];
+    damaged_inventory: DamagedItem[];
+    products: Product[];
+    outlets: Outlet[];
+    dispatch_logs: DispatchLog[];
+    drivers: Driver[];
+    batch_logs: BatchLog[];
+    users: UserProfile[];
+    monthly_cycle?: MonthlyDispatchCycle;
+    system_metadata?: any[];
+  };
+}
+
+export interface AutoBackupScheduleConfig {
+  dailyEnabled: boolean;
+  dailyTime: string; // e.g. "23:59" or "00:00"
+  dailyRetentionDays: number; // e.g. 7, 14, 30
+  monthlyEnabled: boolean;
+  monthlyDay: '1st' | 'last_day'; // '1st' of month at 00:00 or 'last_day' at 23:59
+  monthlyRetentionMonths: number; // e.g. 6, 12, 24
+  autoDownload: boolean; // auto-download file when schedule fires
+  notifyOnSuccess: boolean;
+  saveToHistory: boolean;
+  lastDailyRun?: string;
+  lastMonthlyRun?: string;
+}
+
+export interface BackupHistoryItem {
+  id: string;
+  filename: string;
+  createdAt: string;
+  type: 'daily' | 'monthly' | 'manual';
+  itemCount: number;
+  haccpDocNo: string;
+  operator: string;
+  summary: {
+    inventoryBatchesCount: number;
+    damagedItemsCount: number;
+    productsCount: number;
+    outletsCount: number;
+    dispatchLogsCount: number;
+    driversCount: number;
+    batchLogsCount: number;
+    usersCount: number;
+  };
+  payload?: SystemBackupPayload;
+}

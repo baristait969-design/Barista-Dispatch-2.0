@@ -16,7 +16,8 @@ import {
   Boxes,
   Calendar,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Database
 } from 'lucide-react';
 import { DispatchLog, InventoryBatch, Outlet, Driver, UserProfile } from '../types';
 import { PrintableDispatchSheet } from './PrintableDispatchSheet';
@@ -35,6 +36,7 @@ interface ReportsViewProps {
   drivers?: Driver[];
   usersList?: UserProfile[];
   onNavigate?: (tab: string, targetId?: string) => void;
+  onOpenBackup?: () => void;
 }
 
 export const ReportsView: React.FC<ReportsViewProps> = ({ 
@@ -43,7 +45,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   outlets = [],
   drivers = [],
   usersList = [],
-  onNavigate
+  onNavigate,
+  onOpenBackup
 }) => {
   const { userProfile, role, hasAccess } = useAuth();
   const { showAlert, showConfirm } = useModal();

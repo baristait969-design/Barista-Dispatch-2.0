@@ -1004,8 +1004,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           >
             <Boxes className="w-4 h-4" />
             <span>Product-Wise Stock Count</span>
-            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
-              viewMode === 'product_wise' ? 'bg-amber-700/60 text-stone-950 font-black' : 'bg-stone-800 text-stone-300'
+            <span className={`min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full text-[11px] leading-none ${
+              viewMode === 'product_wise'
+                ? 'bg-stone-950 text-white font-bold shadow-sm'
+                : 'bg-stone-800 text-stone-100 border border-stone-700/80 font-semibold'
             }`}>
               {productWiseStock.length}
             </span>
@@ -1023,8 +1025,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           >
             <Layers className="w-4 h-4" />
             <span>Batch-Wise Details</span>
-            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
-              viewMode === 'batches' ? 'bg-amber-700/60 text-stone-950 font-black' : 'bg-stone-800 text-stone-300'
+            <span className={`min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full text-[11px] leading-none ${
+              viewMode === 'batches'
+                ? 'bg-stone-950 text-white font-bold shadow-sm'
+                : 'bg-stone-800 text-stone-100 border border-stone-700/80 font-semibold'
             }`}>
               {batches.length}
             </span>
@@ -1042,8 +1046,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           >
             <Clock className="w-4 h-4" />
             <span>Expired Stock</span>
-            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
-              viewMode === 'expired' ? 'bg-amber-700/60 text-stone-950 font-black' : 'bg-stone-800 text-stone-300'
+            <span className={`min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full text-[11px] leading-none ${
+              viewMode === 'expired'
+                ? 'bg-stone-950 text-white font-bold shadow-sm'
+                : 'bg-stone-800 text-stone-100 border border-stone-700/80 font-semibold'
             }`}>
               {expiredBatches.length}
             </span>
@@ -1061,8 +1067,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           >
             <AlertTriangle className="w-4 h-4" />
             <span>Damaged Stock</span>
-            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
-              viewMode === 'damaged' ? 'bg-amber-700/60 text-stone-950 font-black' : 'bg-stone-800 text-stone-300'
+            <span className={`min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full text-[11px] leading-none ${
+              viewMode === 'damaged'
+                ? 'bg-stone-950 text-white font-bold shadow-sm'
+                : 'bg-stone-800 text-stone-100 border border-stone-700/80 font-semibold'
             }`}>
               {damagedList.length}
             </span>

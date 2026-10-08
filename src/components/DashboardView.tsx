@@ -18,7 +18,8 @@ import {
   Trash2,
   ShieldCheck,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Database
 } from 'lucide-react';
 import { InventoryBatch, DispatchLog, Outlet, Product, MonthlyDispatchCycle } from '../types';
 import { 
@@ -36,6 +37,7 @@ interface DashboardViewProps {
   products?: Product[];
   onNavigate: (tab: string, targetId?: string) => void;
   dispatchCycle?: MonthlyDispatchCycle;
+  onOpenBackup?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -45,6 +47,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   products,
   onNavigate,
   dispatchCycle: propDispatchCycle,
+  onOpenBackup,
 }) => {
   const { userProfile, role, hasAccess } = useAuth();
   const [dispatchFilterMode, setDispatchFilterMode] = useState<'monthly' | 'all'>('monthly');
@@ -309,6 +312,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       badge: 'QA Compliance',
       color: 'from-[#D84228] to-[#781807]',
       visible: hasAccess('reports', 'view')
+    },
+    {
+      id: 'backup',
+      title: 'System Backup & Recovery',
+      desc: 'One-click full system JSON snapshot, modular Excel/CSV exports, and disaster recovery restore tools.',
+      icon: Database,
+      badge: 'Disaster Recovery',
+      color: 'from-[#3E1812] to-[#1C0A06]',
+      visible: !!onOpenBackup && (role === 'admin' || role === 'editor'),
+      customAction: onOpenBackup
     }
   ];
 
@@ -583,7 +596,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             return (
               <div
                 key={item.id}
-                onClick={() => onNavigate(item.id)}
+                onClick={() => (item as any).customAction ? (item as any).customAction() : onNavigate(item.id)}
                 className="bg-[#171311] border border-[#2E221E] hover:border-[#ED5338]/60 rounded-xl p-5 shadow-sm transition-all hover:shadow-lg hover:shadow-[#ED5338]/5 cursor-pointer group flex flex-col justify-between"
               >
                 <div>

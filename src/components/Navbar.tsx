@@ -11,7 +11,8 @@ import {
   Menu, 
   X, 
   ThermometerSnowflake,
-  UtensilsCrossed
+  UtensilsCrossed,
+  Database
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { BaristaLogo } from './BaristaLogo';
@@ -19,9 +20,10 @@ import { BaristaLogo } from './BaristaLogo';
 interface NavbarProps {
   currentTab: string;
   setCurrentTab: (tab: string) => void;
+  onOpenBackup?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab }) => {
+export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onOpenBackup }) => {
   const { userProfile, role, logout, hasAccess } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -109,6 +111,17 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab }) => 
                 </button>
               );
             })}
+            {onOpenBackup && (
+              <button
+                type="button"
+                onClick={onOpenBackup}
+                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-stone-300 hover:bg-[#251D1A] hover:text-[#ED5338] transition cursor-pointer"
+                title="System Backup & Recovery"
+              >
+                <Database className="w-3.5 h-3.5" />
+                <span>Backup</span>
+              </button>
+            )}
           </nav>
 
           <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
@@ -210,6 +223,19 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab }) => 
                 </button>
               );
             })}
+            {onOpenBackup && (
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenBackup();
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-stone-300 hover:bg-[#1F1917] hover:text-[#ED5338] border border-transparent hover:border-[#382B25] transition text-left cursor-pointer"
+              >
+                <Database className="w-4 h-4" />
+                <span>Backup</span>
+              </button>
+            )}
           </div>
           <div className="pt-2 border-t border-[#2D231F] flex justify-end items-center text-xs">
             <button

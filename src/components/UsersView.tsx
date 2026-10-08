@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
   UserPlus, 
@@ -52,6 +52,16 @@ export const UsersView: React.FC<UsersViewProps> = ({ usersList }) => {
 
   const [submitting, setSubmitting] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+
+  // Automatically dismiss success banners after 4 seconds
+  useEffect(() => {
+    if (actionSuccess) {
+      const timer = setTimeout(() => {
+        setActionSuccess(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [actionSuccess]);
 
   const generateSystemUserId = (targetRole: UserRole = 'editor', list: UserProfile[] = usersList) => {
     const rolePrefix = targetRole === 'admin' ? 'ADM' : targetRole === 'editor' ? 'EDT' : targetRole === 'driver' ? 'DRV' : 'VIW';
@@ -463,31 +473,6 @@ export const UsersView: React.FC<UsersViewProps> = ({ usersList }) => {
               <Lock className="w-3.5 h-3.5 text-amber-400" />
               <span>Only Administrator can manage permissions</span>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Security Rule Information Banner */}
-      <div className={`p-4 rounded-xl border flex items-start space-x-3 ${
-        isAdmin 
-          ? 'bg-stone-900 border-stone-800 text-stone-300' 
-          : 'bg-amber-950/30 border-amber-800/50 text-amber-200'
-      }`}>
-        {isAdmin ? (
-          <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-        ) : (
-          <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-        )}
-        <div className="text-xs leading-relaxed">
-          <strong className="text-white">Access Governance:</strong>{' '}
-          {isAdmin ? (
-            <span>
-              You are signed in as <strong>Administrator ({userProfile?.username || 'admin'})</strong>. You have exclusive authority to create staff accounts, reset passwords, suspend/reactivate accounts, and control module visibility.
-            </span>
-          ) : (
-            <span>
-              <strong>Read-Only View:</strong> Modifying user permissions, resetting passwords, and creating accounts are strictly restricted to <strong>Administrator</strong> accounts.
-            </span>
           )}
         </div>
       </div>
